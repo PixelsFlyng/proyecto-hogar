@@ -1,0 +1,80 @@
+{
+  "name": "Task",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "T\u00edtulo de la tarea"
+    },
+    "description": {
+      "type": "string",
+      "description": "Descripci\u00f3n detallada"
+    },
+    "assigned_to": {
+      "type": "string",
+      "enum": [
+        "ambos",
+        "yo",
+        "pareja"
+      ],
+      "description": "A qui\u00e9n est\u00e1 asignada"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "limpieza",
+        "cocina",
+        "compras",
+        "reparaciones",
+        "mascotas",
+        "jardin",
+        "otros"
+      ],
+      "description": "Categor\u00eda de la tarea"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "baja",
+        "media",
+        "alta"
+      ],
+      "default": "media",
+      "description": "Prioridad"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha l\u00edmite"
+    },
+    "is_recurring": {
+      "type": "boolean",
+      "default": false,
+      "description": "Es tarea recurrente"
+    },
+    "recurrence": {
+      "type": "string",
+      "enum": [
+        "diaria",
+        "semanal",
+        "quincenal",
+        "mensual"
+      ],
+      "description": "Frecuencia de repetici\u00f3n"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "en_progreso",
+        "completada"
+      ],
+      "default": "pendiente",
+      "description": "Estado de la tarea"
+    }
+  },
+  "required": [
+    "title",
+    "assigned_to"
+  ]
+}

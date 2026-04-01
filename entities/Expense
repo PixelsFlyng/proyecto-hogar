@@ -1,0 +1,63 @@
+{
+  "name": "Expense",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string",
+      "description": "Descripci\u00f3n del gasto"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Monto"
+    },
+    "category": {
+      "type": "string",
+      "description": "Categor\u00eda"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha del gasto"
+    },
+    "payment_method": {
+      "type": "string",
+      "description": "M\u00e9todo de pago"
+    },
+    "is_fixed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Es gasto fijo mensual"
+    },
+    "recurrence_end": {
+      "type": "string",
+      "enum": [
+        "indefinido",
+        "meses",
+        "fecha"
+      ],
+      "description": "Tipo de fin de recurrencia"
+    },
+    "recurrence_months": {
+      "type": "number",
+      "description": "Cantidad de meses de recurrencia"
+    },
+    "recurrence_end_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha fin de recurrencia"
+    },
+    "parent_id": {
+      "type": "string",
+      "description": "ID del gasto padre (para recurrentes)"
+    },
+    "original_amount": {
+      "type": "number",
+      "description": "Monto original antes de modificaci\u00f3n"
+    }
+  },
+  "required": [
+    "amount",
+    "category",
+    "date"
+  ]
+}

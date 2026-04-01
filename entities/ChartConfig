@@ -1,0 +1,44 @@
+{
+  "name": "ChartConfig",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nombre del gr\u00e1fico"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "pie",
+        "bar",
+        "line",
+        "area"
+      ],
+      "description": "Tipo de gr\u00e1fico"
+    },
+    "data_source": {
+      "type": "string",
+      "enum": [
+        "expenses_by_category",
+        "expenses_by_payment",
+        "expenses_vs_income",
+        "monthly_trend",
+        "category_trend"
+      ],
+      "description": "Fuente de datos"
+    },
+    "is_visible": {
+      "type": "boolean",
+      "default": true
+    },
+    "order": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "name",
+    "type",
+    "data_source"
+  ]
+}

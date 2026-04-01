@@ -1,0 +1,53 @@
+{
+  "name": "InventoryItem",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nombre del producto"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "frutas_verduras",
+        "carnes",
+        "lacteos",
+        "despensa",
+        "congelados",
+        "bebidas",
+        "limpieza",
+        "otros"
+      ],
+      "description": "Categor\u00eda del producto"
+    },
+    "quantity": {
+      "type": "number",
+      "description": "Cantidad disponible"
+    },
+    "unit": {
+      "type": "string",
+      "enum": [
+        "unidades",
+        "kg",
+        "g",
+        "litros",
+        "ml",
+        "paquetes"
+      ],
+      "description": "Unidad de medida"
+    },
+    "expiration_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha de vencimiento"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Notas adicionales"
+    }
+  },
+  "required": [
+    "name",
+    "category"
+  ]
+}

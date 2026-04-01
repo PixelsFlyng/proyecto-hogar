@@ -1,0 +1,33 @@
+{
+  "name": "CustomCategory",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nombre de la categor\u00eda"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "inventory",
+        "task_category",
+        "task_assignee",
+        "expense",
+        "payment_method"
+      ],
+      "description": "Tipo de categor\u00eda"
+    },
+    "icon": {
+      "type": "string",
+      "description": "Emoji o icono de la categor\u00eda"
+    },
+    "color": {
+      "type": "string",
+      "description": "Color de la categor\u00eda"
+    }
+  },
+  "required": [
+    "name",
+    "type"
+  ]
+}

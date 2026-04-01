@@ -1,0 +1,42 @@
+{
+  "name": "AppSettings",
+  "type": "object",
+  "properties": {
+    "theme": {
+      "type": "string",
+      "enum": [
+        "light",
+        "dark",
+        "coral",
+        "sage",
+        "ocean",
+        "sunset"
+      ],
+      "default": "light",
+      "description": "Tema de la aplicaci\u00f3n"
+    },
+    "connected_users": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Emails de usuarios conectados"
+    },
+    "google_calendar_connected": {
+      "type": "boolean",
+      "default": false
+    },
+    "google_sheets_connected": {
+      "type": "boolean",
+      "default": false
+    },
+    "preferred_charts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Gr\u00e1ficos preferidos"
+    }
+  },
+  "required": []
+}

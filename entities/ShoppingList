@@ -1,0 +1,53 @@
+{
+  "name": "ShoppingList",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nombre de la lista"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Lista activa"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "checked": {
+            "type": "boolean",
+            "default": false
+          },
+          "category": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "De d\u00f3nde viene el item (receta, manual, etc)"
+          }
+        }
+      },
+      "description": "Items de la lista"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "name": "Recipe",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nombre de la receta"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "desayuno",
+        "almuerzo",
+        "cena",
+        "postre",
+        "snack",
+        "bebida"
+      ],
+      "description": "Tipo de comida"
+    },
+    "prep_time": {
+      "type": "number",
+      "description": "Tiempo de preparaci\u00f3n en minutos"
+    },
+    "cook_time": {
+      "type": "number",
+      "description": "Tiempo de cocci\u00f3n en minutos"
+    },
+    "servings": {
+      "type": "number",
+      "description": "Porciones"
+    },
+    "ingredients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Lista de ingredientes"
+    },
+    "instructions": {
+      "type": "string",
+      "description": "Pasos de preparaci\u00f3n"
+    },
+    "image_url": {
+      "type": "string",
+      "description": "Imagen de la receta"
+    },
+    "is_favorite": {
+      "type": "boolean",
+      "default": false,
+      "description": "Marcada como favorita"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Notas adicionales"
+    }
+  },
+  "required": [
+    "name",
+    "category"
+  ]
+}

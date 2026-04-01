@@ -1,0 +1,44 @@
+{
+  "name": "CalendarEvent",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "T\u00edtulo del evento"
+    },
+    "description": {
+      "type": "string",
+      "description": "Descripci\u00f3n"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha del evento"
+    },
+    "time": {
+      "type": "string",
+      "description": "Hora del evento"
+    },
+    "color": {
+      "type": "string",
+      "enum": [
+        "coral",
+        "sage",
+        "terracotta",
+        "blue",
+        "purple"
+      ],
+      "default": "coral",
+      "description": "Color del evento"
+    },
+    "reminder": {
+      "type": "boolean",
+      "default": false,
+      "description": "Tiene recordatorio"
+    }
+  },
+  "required": [
+    "title",
+    "date"
+  ]
+}
