@@ -40,7 +40,8 @@ export default function AddTaskModal({
     priority: 'media',
     due_date: '',
     is_recurring: false,
-    recurrence: 'semanal'
+    recurrence: 'semanal',
+    day_of_week: ''
   });
   const [showNewAssignee, setShowNewAssignee] = useState(false);
   const [showNewCategory, setShowNewCategory] = useState(false);
@@ -88,7 +89,8 @@ export default function AddTaskModal({
         priority: editTask.priority || 'media',
         due_date: editTask.due_date || '',
         is_recurring: editTask.is_recurring || false,
-        recurrence: editTask.recurrence || 'semanal'
+        recurrence: editTask.recurrence || 'semanal',
+        day_of_week: editTask.day_of_week || ''
       });
     } else {
       setFormData({
@@ -99,18 +101,25 @@ export default function AddTaskModal({
         priority: 'media',
         due_date: '',
         is_recurring: false,
-        recurrence: 'semanal'
+        recurrence: 'semanal',
+        day_of_week: '',
       });
     }
   }, [editTask, isOpen]);
 
-  const handleSubmit = (e) => {
+ const handleSubmit = (e) => {
     e.preventDefault();
-    onSave({
+    if (!formData.title.trim() || !formData.assigned_to) return;
+    const dataToSave = {
       ...formData,
       status: editTask?.status || 'pendiente',
-      recurrence: formData.is_recurring ? formData.recurrence : null
-    });
+      recurrence: formData.is_recurring ? formData.recurrence : null,
+    };
+    if (!dataToSave.category) delete dataToSave.category;
+    if (!dataToSave.due_date) delete dataToSave.due_date;
+    if (!dataToSave.description) delete dataToSave.description;
+    if (!dataToSave.day_of_week) delete dataToSave.day_of_week;
+    onSave(dataToSave);
     onClose();
   };
 
@@ -168,7 +177,7 @@ export default function AddTaskModal({
 
                 {/* Assignee Selection */}
                 <div className="space-y-2">
-                  <Label>Asignado a</Label>
+                  <Label>Asignado a *</Label>
                   {customAssignees.length === 0 && !showNewAssignee ?
                 <div className="bg-stone-50 rounded-xl p-4 text-center">
                       <p className="text-sm text-stone-500 mb-3">Agregá personas para asignar tareas</p>
@@ -391,9 +400,31 @@ export default function AddTaskModal({
                   </div>
               }
 
+              {/* Día de la semana */}
+              <div className="space-y-2">
+                <Label>Día asignado (opcional)</Label>
+                <div className="flex flex-wrap gap-2">
+                  {['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'].map((day) => (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, day_of_week: formData.day_of_week === day ? '' : day })}
+                      className={`px-3 py-2 rounded-xl text-sm transition-all ${
+                        formData.day_of_week === day
+                          ? 'bg-stone-900 text-white'
+                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
                 <Button
                 type="submit"
-                className="w-full rounded-xl h-12 bg-stone-900 hover:bg-stone-800">
+                disabled={!formData.title.trim() || !formData.assigned_to}
+                className="w-full rounded-xl h-12 bg-stone-900 hover:bg-stone-800 disabled:opacity-50">
 
                   {editTask ? 'Guardar cambios' : 'Crear tarea'}
                 </Button>

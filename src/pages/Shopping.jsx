@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import SourcesModal from '@/components/shopping/SourcesModal';
+import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 
 const UNITS = [
   { value: 'none', label: 'Sin unidad' },
@@ -60,6 +61,7 @@ export default function Shopping() {
   
   const pendingUpdates = useRef({});
   const queryClient = useQueryClient();
+  useRealtimeQuery('shopping_lists', 'shopping-lists');
 
   const { data: lists = [], isLoading } = useQuery({
     queryKey: ['shopping-lists'],

@@ -15,6 +15,7 @@ import RecipeCard from '@/components/food/RecipeCard';
 import AddInventoryModal from '@/components/food/AddInventoryModal';
 import AddRecipeModal from '@/components/food/AddRecipeModal';
 import { createPageUrl } from '@/utils';
+import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 
 const RECIPE_CATEGORIES = [
   { value: 'all', label: 'Todas' },
@@ -39,6 +40,8 @@ export default function Food() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   
   const queryClient = useQueryClient();
+  useRealtimeQuery('inventory_items', 'inventory');
+  useRealtimeQuery('recipes', 'recipes');
 
   const { data: inventory = [], isLoading: loadingInventory } = useQuery({
     queryKey: ['inventory'],

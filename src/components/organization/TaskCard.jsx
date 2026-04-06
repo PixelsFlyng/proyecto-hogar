@@ -131,6 +131,12 @@ export default function TaskCard({ task, onComplete, onEdit, onDelete, customAss
                   {task.recurrence}
                 </span>
               )}
+
+              {task.day_of_week && (
+                <span className="text-xs text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full">
+                  📅 {task.day_of_week}
+                </span>
+              )}
             </div>
           </div>
         </div>

@@ -13,6 +13,7 @@ import TaskCard from '@/components/organization/TaskCard';
 import AddTaskModal from '@/components/organization/AddTaskModal';
 import CalendarView from '@/components/organization/CalendarView';
 import { format, parseISO, isToday, addDays, addWeeks, addMonths } from 'date-fns';
+import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 
 export default function Organization() {
   const [activeTab, setActiveTab] = useState('tasks');
@@ -21,6 +22,8 @@ export default function Organization() {
   const [editingTask, setEditingTask] = useState(null);
   
   const queryClient = useQueryClient();
+  useRealtimeQuery('tasks', 'tasks');
+  useRealtimeQuery('calendar_events', 'calendar-events');
 
   const { data: tasks = [], isLoading: loadingTasks } = useQuery({
     queryKey: ['tasks'],

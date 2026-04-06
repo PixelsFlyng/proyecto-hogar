@@ -15,6 +15,7 @@ import ExpenseCard from '@/components/economy/ExpenseCard';
 import AddExpenseModal from '@/components/economy/AddExpenseModal';
 import AddIncomeModal from '@/components/economy/AddIncomeModal';
 import ExpenseCharts from '@/components/economy/ExpenseCharts';
+import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 
 export default function Economy() {
   const [activeTab, setActiveTab] = useState('expenses');
@@ -25,6 +26,8 @@ export default function Economy() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   
   const queryClient = useQueryClient();
+  useRealtimeQuery('expenses', 'expenses');
+  useRealtimeQuery('income', 'income');
 
   const { data: expenses = [], isLoading: loadingExpenses } = useQuery({
     queryKey: ['expenses'],

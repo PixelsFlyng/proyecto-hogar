@@ -59,7 +59,9 @@ export default function AddInventoryModal({ isOpen, onClose, onSave }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.category) return;
-    onSave(formData);
+    const dataToSave = { ...formData };
+    if (!dataToSave.expiration_date) delete dataToSave.expiration_date;
+    onSave(dataToSave);
     setFormData({
       name: '',
       category: '',
@@ -107,7 +109,7 @@ export default function AddInventoryModal({ isOpen, onClose, onSave }) {
             <ScrollArea className="flex-1 overflow-auto">
               <form onSubmit={handleSubmit} className="mb-16 px-6 py-3 space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Nombre</Label>
+                  <Label htmlFor="name">Nombre *</Label>
                   <Input
                   id="name"
                   value={formData.name}
@@ -120,7 +122,7 @@ export default function AddInventoryModal({ isOpen, onClose, onSave }) {
 
                 {/* Category Selection */}
                 <div className="space-y-2">
-                  <Label>Categoría</Label>
+                  <Label>Categoría *</Label>
                   {inventoryCategories.length === 0 && !showNewCategory ?
                 <div className="bg-stone-50 rounded-xl p-4 text-center">
                       <p className="text-sm text-stone-500 mb-3">Todavía no tenés categorías</p>
@@ -220,7 +222,7 @@ export default function AddInventoryModal({ isOpen, onClose, onSave }) {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="quantity">Cantidad</Label>
+                    <Label htmlFor="quantity">Cantidad *</Label>
                     <Input
                     id="quantity"
                     type="number"
@@ -232,7 +234,7 @@ export default function AddInventoryModal({ isOpen, onClose, onSave }) {
 
                   </div>
                   <div className="space-y-2">
-                    <Label>Unidad</Label>
+                    <Label>Unidad *</Label>
                     <div className="flex flex-wrap gap-1">
                       {UNITS.map((unit) =>
                     <button

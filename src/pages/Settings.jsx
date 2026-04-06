@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { ArrowLeft, Palette, Users, Link2, Calendar, FileSpreadsheet, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { supabase } from '@/lib/supabase';
 
 const THEMES = [
   { value: 'light', label: 'Claro', bg: '#F5F5F4', primary: '#292524', accent: '#FFFFFF' },
@@ -14,8 +15,129 @@ const THEMES = [
   { value: 'sunset', label: 'Atardecer', bg: '#FFF7ED', primary: '#F97316', accent: '#FED7AA' },
 ];
 
+function HouseholdSection({ currentUser }) {
+  const [link, setLink] = useState(null);
+  const [mode, setMode] = useState(null);
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+
+  useEffect(() => {
+    if (currentUser) {
+      supabase.from('household_links')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .maybeSingle()
+        .then(({ data }) => setLink(data));
+    }
+  }, [currentUser]);
+
+  const generateCode = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  };
+
+  const handleCreate = async () => {
+    setLoading(true);
+    const newCode = generateCode();
+    const { data, error } = await supabase
+      .from('household_links')
+      .insert({ user_id: currentUser.id, owner_id: currentUser.id, code: newCode })
+      .select().single();
+    if (!error) { setLink(data); setCode(newCode); setMessage(''); }
+    else setMessage('Error al crear el hogar.');
+    setLoading(false);
+  };
+
+  const handleJoin = async () => {
+    setLoading(true);
+    setMessage('');
+    const { data: owner } = await supabase
+      .from('household_links')
+      .select('*')
+      .eq('code', joinCode.toUpperCase())
+      .maybeSingle();
+    if (!owner) { setMessage('Código incorrecto.'); setLoading(false); return; }
+    const { error } = await supabase
+      .from('household_links')
+      .upsert({ user_id: currentUser.id, owner_id: owner.owner_id, code: joinCode.toUpperCase() });
+    if (!error) { setMessage('¡Te uniste al hogar! Recargá la app.'); setMode(null); }
+    else setMessage('Error al unirse.');
+    setLoading(false);
+  };
+
+  const handleLeave = async () => {
+    await supabase.from('household_links').delete().eq('user_id', currentUser.id);
+    setLink(null);
+    setMode(null);
+    setMessage('Saliste del hogar.');
+  };
+
+  if (link && link.owner_id === currentUser?.id) {
+    return (
+      <div>
+        <p className="text-sm text-stone-600 mb-3">Sos el creador del hogar. Compartí este código con tu pareja:</p>
+        <div className="bg-stone-50 rounded-xl p-4 text-center mb-3">
+          <p className="text-2xl font-bold tracking-widest text-stone-900">{link.code}</p>
+          <p className="text-xs text-stone-400 mt-1">Tu pareja lo ingresa en Configuración → Hogar compartido</p>
+        </div>
+        <button onClick={handleLeave} className="text-xs text-red-400 underline">Disolver hogar</button>
+      </div>
+    );
+  }
+
+  if (link && link.owner_id !== currentUser?.id) {
+    return (
+      <div>
+        <div className="bg-emerald-50 rounded-xl p-3 mb-3 flex items-center gap-2">
+          <span className="text-emerald-600 text-lg">✓</span>
+          <p className="text-sm text-emerald-700">Estás conectado a un hogar compartido</p>
+        </div>
+        <button onClick={handleLeave} className="text-xs text-red-400 underline">Salir del hogar</button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {message && <p className="text-sm text-stone-600 mb-3">{message}</p>}
+      {!mode && (
+        <div className="flex flex-col gap-2">
+          <button onClick={handleCreate} disabled={loading}
+            className="w-full p-3 rounded-xl bg-stone-900 text-white text-sm font-medium disabled:opacity-50">
+            {loading ? 'Creando...' : 'Crear hogar y obtener código'}
+          </button>
+          <button onClick={() => setMode('join')}
+            className="w-full p-3 rounded-xl border border-stone-200 text-sm text-stone-700">
+            Tengo un código, unirme
+          </button>
+        </div>
+      )}
+      {mode === 'join' && (
+        <div className="space-y-3">
+          <input
+            type="text"
+            placeholder="Ingresá el código"
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+            style={{ width: '100%', padding: '10px 14px', borderRadius: '12px', border: '1px solid #E7E5E4', fontSize: '16px', boxSizing: 'border-box', textAlign: 'center', letterSpacing: '4px', fontWeight: 'bold' }}
+          />
+          {message && <p className="text-sm text-red-500">{message}</p>}
+          <div className="flex gap-2">
+            <button onClick={() => setMode(null)} className="flex-1 p-3 rounded-xl border border-stone-200 text-sm text-stone-700">Cancelar</button>
+            <button onClick={handleJoin} disabled={loading || joinCode.length < 6}
+              className="flex-1 p-3 rounded-xl bg-stone-900 text-white text-sm font-medium disabled:opacity-50">
+              {loading ? 'Uniéndome...' : 'Unirme'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Settings() {
-  const [inviteEmail, setInviteEmail] = useState('');
   const [currentTheme, setCurrentTheme] = useState('light');
   
   const queryClient = useQueryClient();
@@ -131,49 +253,18 @@ export default function Settings() {
           </div>
         </section>
 
-        {/* Connected Users */}
+        {/* Compartir hogar */}
         <section className="bg-white rounded-2xl border border-stone-100 p-4">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-stone-100 rounded-xl">
               <Users className="w-5 h-5 text-stone-600" />
             </div>
             <div>
-              <h2 className="font-semibold text-stone-900">Compartir</h2>
-              <p className="text-sm text-stone-500">Invita a alguien a usar la app</p>
+              <h2 className="font-semibold text-stone-900">Hogar compartido</h2>
+              <p className="text-sm text-stone-500">Comparte la app con tu pareja</p>
             </div>
           </div>
-
-          {currentUser && (
-            <div className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl mb-3">
-              <div className="w-10 h-10 bg-stone-200 rounded-full flex items-center justify-center">
-                <User className="w-5 h-5 text-stone-500" />
-              </div>
-              <div>
-                <p className="font-medium text-stone-700">{currentUser.full_name || 'Tú'}</p>
-                <p className="text-sm text-stone-500">{currentUser.email}</p>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <Input
-              placeholder="Email..."
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              className="rounded-xl flex-1"
-            />
-            <Button
-              onClick={async () => {
-                if (inviteEmail) {
-                  await base44.users.inviteUser(inviteEmail, 'user');
-                  setInviteEmail('');
-                }
-              }}
-              className="rounded-xl bg-stone-900"
-            >
-              Invitar
-            </Button>
-          </div>
+          <HouseholdSection currentUser={currentUser} />
         </section>
 
         {/* Integrations */}

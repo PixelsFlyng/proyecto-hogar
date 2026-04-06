@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { base44 } from '@/api/base44Client';
+import { supabase } from '@/lib/supabase';
 
 const categories = [
 { value: 'desayuno', label: 'Desayuno' },
@@ -70,6 +71,15 @@ export default function AddRecipeModal({ isOpen, onClose, onSave, editRecipe = n
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    const hasIngredient = formData.ingredients.some(i => i.name.trim());
+    if (
+      !formData.name.trim() ||
+      !formData.instructions.trim() ||
+      !formData.prep_time ||
+      !formData.cook_time ||
+      !formData.servings ||
+      !hasIngredient
+    ) return;
     onSave({
       ...formData,
       prep_time: formData.prep_time ? parseInt(formData.prep_time) : null,
@@ -111,8 +121,19 @@ export default function AddRecipeModal({ isOpen, onClose, onSave, editRecipe = n
     if (!file) return;
 
     setUploading(true);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    setFormData({ ...formData, image_url: file_url });
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}.${fileExt}`;
+    
+    const { error } = await supabase.storage
+      .from('recipe-images')
+      .upload(fileName, file);
+
+    if (!error) {
+      const { data } = supabase.storage
+        .from('recipe-images')
+        .getPublicUrl(fileName);
+      setFormData({ ...formData, image_url: data.publicUrl });
+    }
     setUploading(false);
   };
 
@@ -175,7 +196,7 @@ export default function AddRecipeModal({ isOpen, onClose, onSave, editRecipe = n
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="name">Nombre de la receta</Label>
+                <Label htmlFor="name">Nombre de la receta *</Label>
                 <Input
                 id="name"
                 value={formData.name}
@@ -187,7 +208,7 @@ export default function AddRecipeModal({ isOpen, onClose, onSave, editRecipe = n
               </div>
 
               <div className="space-y-2">
-                <Label>Categoría</Label>
+                <Label>Categoría *</Label>
                 <Select
                 value={formData.category}
                 onValueChange={(value) => setFormData({ ...formData, category: value })}>
@@ -207,7 +228,7 @@ export default function AddRecipeModal({ isOpen, onClose, onSave, editRecipe = n
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-2">
-                  <Label htmlFor="prep">Prep (min)</Label>
+                  <Label htmlFor="prep">Prep (min) *</Label>
                   <Input
                   id="prep"
                   type="number"
@@ -217,7 +238,7 @@ export default function AddRecipeModal({ isOpen, onClose, onSave, editRecipe = n
 
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="cook">Cocción (min)</Label>
+                  <Label htmlFor="cook">Cocción (min) *</Label>
                   <Input
                   id="cook"
                   type="number"
@@ -227,7 +248,7 @@ export default function AddRecipeModal({ isOpen, onClose, onSave, editRecipe = n
 
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="servings">Porciones</Label>
+                  <Label htmlFor="servings">Porciones *</Label>
                   <Input
                   id="servings"
                   type="number"
@@ -240,7 +261,7 @@ export default function AddRecipeModal({ isOpen, onClose, onSave, editRecipe = n
 
               {/* Ingredients */}
               <div className="space-y-3">
-                <Label>Ingredientes</Label>
+                <Label>Ingredientes *</Label>
                 {formData.ingredients.map((ing, idx) =>
               <div key={idx} className="flex gap-2 items-start">
                     <Input
@@ -293,7 +314,7 @@ export default function AddRecipeModal({ isOpen, onClose, onSave, editRecipe = n
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="instructions">Instrucciones</Label>
+                <Label htmlFor="instructions">Instrucciones *</Label>
                 <Textarea
                 id="instructions"
                 value={formData.instructions}
@@ -317,7 +338,8 @@ export default function AddRecipeModal({ isOpen, onClose, onSave, editRecipe = n
 
               <Button
               type="submit"
-              className="w-full rounded-xl h-12 bg-stone-900 hover:bg-stone-800">
+              disabled={!formData.name.trim() || !formData.instructions.trim() || !formData.prep_time || !formData.cook_time || !formData.servings || !formData.ingredients.some(i => i.name.trim())}
+              className="w-full rounded-xl h-12 bg-stone-900 hover:bg-stone-800 disabled:opacity-50">
 
                 {editRecipe ? 'Guardar cambios' : 'Crear receta'}
               </Button>
