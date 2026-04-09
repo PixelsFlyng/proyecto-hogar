@@ -11,17 +11,24 @@ export default function Login() {
   const [message, setMessage] = useState('');
 
   const handleGoogleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin,
-        scopes: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/cloud-platform',
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
-      }
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const redirectUri = window.location.origin;
+    const scopes = [
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile',
+      'https://www.googleapis.com/auth/spreadsheets',
+      'openid'
+    ].join(' ');
+    
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: 'token',
+      scope: scopes,
+      prompt: localStorage.getItem('google_access_token') ? 'select_account' : 'consent',
     });
+    
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
   };
 
   const handleSubmit = async () => {
