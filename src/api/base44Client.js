@@ -2,14 +2,18 @@ import { supabase } from '@/lib/supabase';
 
 // Devuelve el owner_id (el user_id del creador del hogar)
 // Si el usuario no tiene hogar, devuelve su propio user_id
+let cachedOwnerId = null;
+
 const getOwnerId = async () => {
+  if (cachedOwnerId) return cachedOwnerId;
   const { data: { user } } = await supabase.auth.getUser();
   const { data } = await supabase
     .from('household_links')
     .select('owner_id')
     .eq('user_id', user.id)
     .maybeSingle();
-  return data?.owner_id || user.id;
+  cachedOwnerId = data?.owner_id || user.id;
+  return cachedOwnerId;
 };
 
 const createEntity = (tableName) => ({

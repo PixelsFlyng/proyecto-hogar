@@ -13,11 +13,17 @@ export const AuthProvider = ({ children }) => {
       setUser(session?.user ?? null);
       setIsAuthenticated(!!session);
       setIsLoadingAuth(false);
+      if (session?.provider_token) {
+        localStorage.setItem('google_access_token', session.provider_token);
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       setIsAuthenticated(!!session);
+      if (session?.provider_token) {
+        localStorage.setItem('google_access_token', session.provider_token);
+      }
     });
 
     return () => subscription.unsubscribe();
