@@ -16,6 +16,10 @@ export default function Login() {
       options: {
         redirectTo: window.location.origin,
         scopes: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/cloud-platform',
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
       }
     });
   };
