@@ -7,8 +7,6 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import Login from './pages/Login';
-import { useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -20,25 +18,6 @@ const LayoutWrapper = ({ children, currentPageName }) => Layout ?
 
 const AuthenticatedApp = () => {
   const { isAuthenticated, isLoadingAuth } = useAuth();
-
-  useEffect(() => {
-    const hash = window.location.hash;
-    if (hash && hash.includes('access_token')) {
-      const params = new URLSearchParams(hash.substring(1));
-      const token = params.get('access_token');
-      const expiresIn = params.get('expires_in');
-      if (token) {
-        localStorage.setItem('google_access_token', token);
-        localStorage.setItem('google_token_expiry', (Date.now() + parseInt(expiresIn) * 1000).toString());
-        window.history.replaceState({}, document.title, window.location.pathname);
-        // Ahora hacer login en Supabase con Google también
-        supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: { redirectTo: window.location.origin }
-        });
-      }
-    }
-  }, []);
 
   if (isLoadingAuth) {
     return (
