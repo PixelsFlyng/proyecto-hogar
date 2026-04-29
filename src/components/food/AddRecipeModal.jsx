@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { base44 } from '@/api/base44Client';
 import { supabase } from '@/lib/supabase';
 
 const categories = [
@@ -43,6 +42,12 @@ export default function AddRecipeModal({ isOpen, onClose, onSave, editRecipe = n
     notes: ''
   });
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = '';
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
 
   useEffect(() => {
     if (editRecipe) {
@@ -152,7 +157,8 @@ export default function AddRecipeModal({ isOpen, onClose, onSave, editRecipe = n
           initial={{ opacity: 0, y: 100 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 100 }}
-          className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 max-h-[90vh] overflow-y-auto touch-pan-y">
+          className="fixed left-0 right-0 bg-white rounded-t-3xl z-50 flex flex-col"
+          style={{ bottom: 'calc(50px + env(safe-area-inset-bottom, 0px))', maxHeight: 'calc(85vh - 50px)', overflowY: 'auto', overscrollBehavior: 'contain' }}>
 
             <div className="sticky top-0 bg-white px-6 py-4 border-b border-stone-100 flex items-center justify-between z-10">
               <h2 className="text-lg font-semibold text-stone-900">
@@ -163,7 +169,7 @@ export default function AddRecipeModal({ isOpen, onClose, onSave, editRecipe = n
               </button>
             </div>
             
-            <form onSubmit={handleSubmit} className="mb-16 px-6 py-3 space-y-5">
+            <form onSubmit={handleSubmit} className="px-6 py-3 space-y-5 pb-6">
               {/* Image Upload */}
               <div className="space-y-2">
                 <Label>Imagen (opcional)</Label>

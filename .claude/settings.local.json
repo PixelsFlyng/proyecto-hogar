@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(npm uninstall *)",
+      "Bash(node -e \"const pkg = require\\('./node_modules/@supabase/supabase-js/package.json'\\); console.log\\(pkg.version\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":5173\\\\|:5174\")",
+      "PowerShell(Get-NetTCPConnection -LocalPort 5173,5174 -ErrorAction SilentlyContinue)"
+    ]
+  }
+}

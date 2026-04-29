@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Check, Trash2, MoreVertical, ShoppingCart, Archive, X, Package, Edit2, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -65,12 +65,12 @@ export default function Shopping() {
 
   const { data: lists = [], isLoading } = useQuery({
     queryKey: ['shopping-lists'],
-    queryFn: () => base44.entities.ShoppingList.list('-created_date'),
+    queryFn: () => api.entities.ShoppingList.list('-created_date'),
   });
 
   const { data: customCategories = [] } = useQuery({
     queryKey: ['custom-categories'],
-    queryFn: () => base44.entities.CustomCategory.list(),
+    queryFn: () => api.entities.CustomCategory.list(),
   });
 
   const inventoryCategories = customCategories.filter(c => c.type === 'inventory');
@@ -79,7 +79,7 @@ export default function Shopping() {
   const archivedLists = lists.filter(l => !l.is_active);
 
   const createListMutation = useMutation({
-    mutationFn: (data) => base44.entities.ShoppingList.create(data),
+    mutationFn: (data) => api.entities.ShoppingList.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shopping-lists'] });
       setNewListName('');
@@ -88,12 +88,12 @@ export default function Shopping() {
   });
 
   const updateListMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.ShoppingList.update(id, data),
+    mutationFn: ({ id, data }) => api.entities.ShoppingList.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['shopping-lists'] }),
   });
 
   const deleteListMutation = useMutation({
-    mutationFn: (id) => base44.entities.ShoppingList.delete(id),
+    mutationFn: (id) => api.entities.ShoppingList.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shopping-lists'] });
       setSelectedList(null);
@@ -101,7 +101,7 @@ export default function Shopping() {
   });
 
   const createInventoryMutation = useMutation({
-    mutationFn: (data) => base44.entities.InventoryItem.create(data),
+    mutationFn: (data) => api.entities.InventoryItem.create(data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['inventory'] }),
   });
 

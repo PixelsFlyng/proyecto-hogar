@@ -2,7 +2,6 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { UtensilsCrossed, ShoppingCart, CalendarCheck, Wallet } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 const navItems = [
   { name: 'Comida', icon: UtensilsCrossed, page: 'Food' },

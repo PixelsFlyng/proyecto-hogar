@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import BottomNav from '@/components/navigation/BottomNav';
@@ -27,7 +27,7 @@ export default function Layout({ children, currentPageName }) {
   const { data: settings } = useQuery({
     queryKey: ['app-settings'],
     queryFn: async () => {
-      const list = await base44.entities.AppSettings.list();
+      const list = await api.entities.AppSettings.list();
       return list[0] || null;
     },
   });
@@ -168,7 +168,7 @@ export default function Layout({ children, currentPageName }) {
         }
       `}</style>
       
-      <main className="px-4 max-w-lg mx-auto pb-28 min-h-[calc(100vh-7rem)]">
+      <main className="px-4 max-w-lg mx-auto min-h-[calc(100vh-7rem)]" style={{ paddingBottom: 'calc(70px + env(safe-area-inset-bottom, 0px))' }}>
         {children}
       </main>
       

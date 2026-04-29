@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
-import { ArrowLeft, Palette, Users, Link2, Calendar, FileSpreadsheet, User } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { api } from '@/api/apiClient';
+import { ArrowLeft, Palette, Users, User } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 const THEMES = [
@@ -145,14 +143,14 @@ export default function Settings() {
   const { data: settings } = useQuery({
     queryKey: ['app-settings'],
     queryFn: async () => {
-      const list = await base44.entities.AppSettings.list();
+      const list = await api.entities.AppSettings.list();
       return list[0] || null;
     },
   });
 
   const { data: currentUser } = useQuery({
     queryKey: ['current-user'],
-    queryFn: () => base44.auth.me(),
+    queryFn: () => api.auth.me(),
   });
 
   useEffect(() => {
@@ -165,9 +163,9 @@ export default function Settings() {
   const updateSettingsMutation = useMutation({
     mutationFn: async (data) => {
       if (settings?.id) {
-        return base44.entities.AppSettings.update(settings.id, data);
+        return api.entities.AppSettings.update(settings.id, data);
       } else {
-        return base44.entities.AppSettings.create(data);
+        return api.entities.AppSettings.create(data);
       }
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['app-settings'] }),
@@ -267,49 +265,39 @@ export default function Settings() {
           <HouseholdSection currentUser={currentUser} />
         </section>
 
-        {/* Integrations */}
+        {/* Cuenta */}
         <section className="bg-white rounded-2xl border border-stone-100 p-4">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-stone-100 rounded-xl">
-              <Link2 className="w-5 h-5 text-stone-600" />
+              <User className="w-5 h-5 text-stone-600" />
             </div>
             <div>
-              <h2 className="font-semibold text-stone-900">Integraciones</h2>
-              <p className="text-sm text-stone-500">Conecta servicios externos</p>
+              <h2 className="font-semibold text-stone-900">Cuenta</h2>
+              <p className="text-sm text-stone-500">{currentUser?.email}</p>
             </div>
           </div>
-
           <div className="space-y-2">
-            <div className="flex items-center justify-between p-3 bg-stone-50 rounded-xl opacity-50">
-              <div className="flex items-center gap-3">
-                <Calendar className="w-5 h-5 text-stone-500" />
-                <div>
-                  <p className="font-medium text-stone-700">Google Calendar</p>
-                  <p className="text-xs text-stone-500">Sincroniza eventos</p>
-                </div>
-              </div>
-              <span className="text-xs text-stone-400 px-2 py-1 bg-stone-200 rounded-full">
-                Premium
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-stone-50 rounded-xl opacity-50">
-              <div className="flex items-center gap-3">
-                <FileSpreadsheet className="w-5 h-5 text-stone-500" />
-                <div>
-                  <p className="font-medium text-stone-700">Google Sheets</p>
-                  <p className="text-xs text-stone-500">Exporta gastos</p>
-                </div>
-              </div>
-              <span className="text-xs text-stone-400 px-2 py-1 bg-stone-200 rounded-full">
-                Premium
-              </span>
-            </div>
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut();
+                window.location.href = '/';
+              }}
+              className="w-full p-3 rounded-xl border border-stone-200 text-sm text-stone-700 text-left hover:bg-stone-50"
+            >
+              Cerrar sesión
+            </button>
+            <button
+              onClick={async () => {
+                if (confirm('¿Seguro que querés eliminar tu cuenta? Esta acción no se puede deshacer.')) {
+                  await supabase.auth.signOut();
+                  window.location.href = '/';
+                }
+              }}
+              className="w-full p-3 rounded-xl border border-red-100 text-sm text-red-500 text-left hover:bg-red-50"
+            >
+              Eliminar cuenta
+            </button>
           </div>
-
-          <p className="text-xs text-stone-400 mt-3 text-center">
-            Activa el plan Premium para conectar estas integraciones
-          </p>
         </section>
       </div>
     </div>

@@ -1,39 +1,44 @@
-**Welcome to your Base44 project** 
+# Proyecto Hogar
 
-**About**
+App de organización del hogar para uso compartido entre dos personas. Cubre cuatro secciones:
 
-View and Edit  your app on [Base44.com](http://Base44.com) 
+- **Comida** — inventario de almacén + recetario
+- **Compras** — listas de compras colaborativas
+- **Organización** — tareas + calendario
+- **Economía** — gastos, ingresos y gráficos
 
-This project contains everything you need to run your app locally.
+SPA mobile-first (React + Vite + Supabase + Tailwind/shadcn).
 
-**Edit the code in your local development environment**
+## Requisitos
 
-Any change pushed to the repo will also be reflected in the Base44 Builder.
+- Node 18+
+- Cuenta en [Supabase](https://supabase.com)
 
-**Prerequisites:** 
+## Setup
 
-1. Clone the repository using the project's Git URL 
-2. Navigate to the project directory
-3. Install dependencies: `npm install`
-4. Create an `.env.local` file and set the right environment variables
+1. Clonar el repo e instalar dependencias:
+   ```bash
+   npm install
+   ```
 
+2. Crear `.env.local` en la raíz con las credenciales de Supabase:
+   ```
+   VITE_SUPABASE_URL=https://<proyecto>.supabase.co
+   VITE_SUPABASE_ANON_KEY=<anon-key>
+   ```
+
+3. Asegurarse de tener las tablas en Supabase (ver `entities/` para los schemas).
+
+## Comandos
+
+```bash
+npm run dev        # servidor de desarrollo
+npm run build      # build de producción
+npm run preview    # servir el build local
+npm run lint       # ESLint (solo errores)
+npm run typecheck  # tsc checkJs
 ```
-VITE_BASE44_APP_ID=your_app_id
-VITE_BASE44_APP_BASE_URL=your_backend_url
 
-e.g.
-VITE_BASE44_APP_ID=cbef744a8545c389ef439ea6
-VITE_BASE44_APP_BASE_URL=https://my-to-do-list-81bfaad7.base44.app
-```
+## Deploy
 
-Run the app: `npm run dev`
-
-**Publish your changes**
-
-Open [Base44.com](http://Base44.com) and click on Publish.
-
-**Docs & Support**
-
-Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
-
-Support: [https://app.base44.com/support](https://app.base44.com/support)
+El build genera la carpeta `dist/`. Se puede servir con cualquier hosting estático (Vercel, Netlify, etc.).

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Clock, Users, Heart, Edit2, Trash2, Check, ShoppingCart, ChefHat, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Clock, Users, Heart, Edit2, Trash2, Check, ShoppingCart, ChefHat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createPageUrl } from '@/utils';
 import AddRecipeModal from '@/components/food/AddRecipeModal';
@@ -39,7 +39,7 @@ export default function RecipeDetail() {
   const { data: recipe, isLoading } = useQuery({
     queryKey: ['recipe', recipeId],
     queryFn: async () => {
-      const recipes = await base44.entities.Recipe.filter({ id: recipeId });
+      const recipes = await api.entities.Recipe.filter({ id: recipeId });
       return recipes[0];
     },
     enabled: !!recipeId,
@@ -47,16 +47,16 @@ export default function RecipeDetail() {
 
   const { data: inventory = [] } = useQuery({
     queryKey: ['inventory'],
-    queryFn: () => base44.entities.InventoryItem.list(),
+    queryFn: () => api.entities.InventoryItem.list(),
   });
 
   const { data: shoppingLists = [] } = useQuery({
     queryKey: ['shopping-lists'],
-    queryFn: () => base44.entities.ShoppingList.list('-created_date'),
+    queryFn: () => api.entities.ShoppingList.list('-created_date'),
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data) => base44.entities.Recipe.update(recipeId, data),
+    mutationFn: (data) => api.entities.Recipe.update(recipeId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] });
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
@@ -64,33 +64,33 @@ export default function RecipeDetail() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => base44.entities.Recipe.delete(recipeId),
+    mutationFn: () => api.entities.Recipe.delete(recipeId),
     onSuccess: () => {
       window.location.href = createPageUrl('Food') + '?tab=recipes';
     },
   });
 
   const createListMutation = useMutation({
-    mutationFn: (data) => base44.entities.ShoppingList.create(data),
+    mutationFn: (data) => api.entities.ShoppingList.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shopping-lists'] });
     },
   });
 
   const updateListMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.ShoppingList.update(id, data),
+    mutationFn: ({ id, data }) => api.entities.ShoppingList.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shopping-lists'] });
     },
   });
 
   const updateInventoryMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.InventoryItem.update(id, data),
+    mutationFn: ({ id, data }) => api.entities.InventoryItem.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['inventory'] }),
   });
 
   const deleteInventoryMutation = useMutation({
-    mutationFn: (id) => base44.entities.InventoryItem.delete(id),
+    mutationFn: (id) => api.entities.InventoryItem.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['inventory'] }),
   });
 

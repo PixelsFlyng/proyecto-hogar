@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { AnimatePresence } from 'framer-motion';
 import { Plus, Package, BookOpen, Search, Heart, ChefHat } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -45,38 +45,38 @@ export default function Food() {
 
   const { data: inventory = [], isLoading: loadingInventory } = useQuery({
     queryKey: ['inventory'],
-    queryFn: () => base44.entities.InventoryItem.list('-created_date'),
+    queryFn: () => api.entities.InventoryItem.list('-created_date'),
   });
 
   const { data: recipes = [], isLoading: loadingRecipes } = useQuery({
     queryKey: ['recipes'],
-    queryFn: () => base44.entities.Recipe.list('-created_date'),
+    queryFn: () => api.entities.Recipe.list('-created_date'),
   });
 
   const { data: customCategories = [] } = useQuery({
     queryKey: ['custom-categories'],
-    queryFn: () => base44.entities.CustomCategory.list(),
+    queryFn: () => api.entities.CustomCategory.list(),
   });
 
   const inventoryCustomCats = customCategories.filter(c => c.type === 'inventory');
 
   const createInventoryMutation = useMutation({
-    mutationFn: (data) => base44.entities.InventoryItem.create(data),
+    mutationFn: (data) => api.entities.InventoryItem.create(data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['inventory'] }),
   });
 
   const deleteInventoryMutation = useMutation({
-    mutationFn: (id) => base44.entities.InventoryItem.delete(id),
+    mutationFn: (id) => api.entities.InventoryItem.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['inventory'] }),
   });
 
   const createRecipeMutation = useMutation({
-    mutationFn: (data) => base44.entities.Recipe.create(data),
+    mutationFn: (data) => api.entities.Recipe.create(data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['recipes'] }),
   });
 
   const updateRecipeMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Recipe.update(id, data),
+    mutationFn: ({ id, data }) => api.entities.Recipe.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['recipes'] }),
   });
 

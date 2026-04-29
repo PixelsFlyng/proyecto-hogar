@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,13 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue } from
-"@/components/ui/select";
+
+
 import { format, addMonths, parseISO, isBefore } from 'date-fns';
 
 const EMOJI_OPTIONS = ['🍽️', '💡', '🚗', '🎬', '💊', '🏠', '📦', '🎁', '✈️', '🎮', '📚', '🏋️', '🛒', '💰', '🏦', '💳'];
@@ -31,6 +26,12 @@ export default function AddExpenseModal({ isOpen, onClose, onSave }) {
     recurrence_months: 12,
     recurrence_end_date: ''
   });
+
+  useEffect(() => {
+    if (isOpen) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = '';
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [showNewPayment, setShowNewPayment] = useState(false);
   const [newCatName, setNewCatName] = useState('');
@@ -42,14 +43,14 @@ export default function AddExpenseModal({ isOpen, onClose, onSave }) {
 
   const { data: customCategories = [] } = useQuery({
     queryKey: ['custom-categories'],
-    queryFn: () => base44.entities.CustomCategory.list()
+    queryFn: () => api.entities.CustomCategory.list()
   });
 
   const expenseCategories = customCategories.filter((c) => c.type === 'expense');
   const paymentMethods = customCategories.filter((c) => c.type === 'payment_method');
 
   const createCategoryMutation = useMutation({
-    mutationFn: (data) => base44.entities.CustomCategory.create(data),
+    mutationFn: (data) => api.entities.CustomCategory.create(data),
     onSuccess: (newCat) => {
       queryClient.invalidateQueries({ queryKey: ['custom-categories'] });
       if (newCat.type === 'expense') {
@@ -65,7 +66,7 @@ export default function AddExpenseModal({ isOpen, onClose, onSave }) {
   });
 
   const deleteCategoryMutation = useMutation({
-    mutationFn: (id) => base44.entities.CustomCategory.delete(id),
+    mutationFn: (id) => api.entities.CustomCategory.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['custom-categories'] })
   });
 
@@ -86,7 +87,7 @@ export default function AddExpenseModal({ isOpen, onClose, onSave }) {
     };
 
     // Create main expense
-    const mainExpense = await base44.entities.Expense.create(baseExpense);
+    const mainExpense = await api.entities.Expense.create(baseExpense);
 
     // If recurring, create future expenses
     if (formData.is_fixed) {
@@ -104,7 +105,7 @@ export default function AddExpenseModal({ isOpen, onClose, onSave }) {
       if (endDate) {
         let currentDate = addMonths(startDate, 1);
         while (isBefore(currentDate, endDate)) {
-          await base44.entities.Expense.create({
+          await api.entities.Expense.create({
             ...baseExpense,
             date: format(currentDate, 'yyyy-MM-dd'),
             parent_id: mainExpense.id
@@ -144,7 +145,8 @@ export default function AddExpenseModal({ isOpen, onClose, onSave }) {
           initial={{ opacity: 0, y: 100 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 100 }}
-          className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 max-h-[90vh] flex flex-col">
+          className="fixed left-0 right-0 bg-white rounded-t-3xl z-50 flex flex-col"
+          style={{ bottom: 'calc(50px + env(safe-area-inset-bottom, 0px))', maxHeight: 'calc(85vh - 50px)' }}>
 
             <div className="flex-shrink-0 px-6 py-4 border-b border-stone-100 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-stone-900">Nuevo gasto</h2>
@@ -153,8 +155,8 @@ export default function AddExpenseModal({ isOpen, onClose, onSave }) {
               </button>
             </div>
             
-            <ScrollArea className="flex-1 overflow-auto touch-pan-y">
-              <form onSubmit={handleSubmit} className="mb-16 px-6 py-3 space-y-4">
+            <ScrollArea className="flex-1 overflow-auto touch-pan-y" style={{ overscrollBehavior: 'contain' }}>
+              <form onSubmit={handleSubmit} className="px-6 py-3 space-y-4 pb-6">
                 <div className="space-y-2">
                   <Label htmlFor="description">Descripción (opcional)</Label>
                   <Input

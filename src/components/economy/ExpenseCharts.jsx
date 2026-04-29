@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area, Legend } from 'recharts';
-import { Plus, Settings2, GripVertical, Trash2, Eye, EyeOff } from 'lucide-react';
+import { api } from '@/api/apiClient';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area } from 'recharts';
+import { Plus, Trash2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -57,11 +57,11 @@ export default function ExpenseCharts({ expenses, incomes, customCategories = []
 
   const { data: chartConfigs = [] } = useQuery({
     queryKey: ['chart-configs'],
-    queryFn: () => base44.entities.ChartConfig.list('order'),
+    queryFn: () => api.entities.ChartConfig.list('order'),
   });
 
   const createChartMutation = useMutation({
-    mutationFn: (data) => base44.entities.ChartConfig.create(data),
+    mutationFn: (data) => api.entities.ChartConfig.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chart-configs'] });
       setShowAddChart(false);
@@ -70,12 +70,12 @@ export default function ExpenseCharts({ expenses, incomes, customCategories = []
   });
 
   const updateChartMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.ChartConfig.update(id, data),
+    mutationFn: ({ id, data }) => api.entities.ChartConfig.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['chart-configs'] }),
   });
 
   const deleteChartMutation = useMutation({
-    mutationFn: (id) => base44.entities.ChartConfig.delete(id),
+    mutationFn: (id) => api.entities.ChartConfig.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['chart-configs'] }),
   });
 

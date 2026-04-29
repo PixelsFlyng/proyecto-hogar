@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { AnimatePresence } from 'framer-motion';
 import { Plus, ListTodo, Calendar, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -27,17 +27,17 @@ export default function Organization() {
 
   const { data: tasks = [], isLoading: loadingTasks } = useQuery({
     queryKey: ['tasks'],
-    queryFn: () => base44.entities.Task.list('-created_date'),
+    queryFn: () => api.entities.Task.list('-created_date'),
   });
 
   const { data: events = [], isLoading: loadingEvents } = useQuery({
     queryKey: ['calendar-events'],
-    queryFn: () => base44.entities.CalendarEvent.list('-date'),
+    queryFn: () => api.entities.CalendarEvent.list('-date'),
   });
 
   const { data: customCategories = [] } = useQuery({
     queryKey: ['custom-categories'],
-    queryFn: () => base44.entities.CustomCategory.list(),
+    queryFn: () => api.entities.CustomCategory.list(),
   });
 
   const customAssignees = customCategories.filter(c => c.type === 'task_assignee');
@@ -47,32 +47,32 @@ export default function Organization() {
   const allAssignees = customAssignees.map(c => ({ value: c.name, label: `${c.icon} ${c.name}` }));
 
   const createTaskMutation = useMutation({
-    mutationFn: (data) => base44.entities.Task.create(data),
+    mutationFn: (data) => api.entities.Task.create(data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
   const updateTaskMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Task.update(id, data),
+    mutationFn: ({ id, data }) => api.entities.Task.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
   const deleteTaskMutation = useMutation({
-    mutationFn: (id) => base44.entities.Task.delete(id),
+    mutationFn: (id) => api.entities.Task.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 
   const createEventMutation = useMutation({
-    mutationFn: (data) => base44.entities.CalendarEvent.create(data),
+    mutationFn: (data) => api.entities.CalendarEvent.create(data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['calendar-events'] }),
   });
 
   const updateEventMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.CalendarEvent.update(id, data),
+    mutationFn: ({ id, data }) => api.entities.CalendarEvent.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['calendar-events'] }),
   });
 
   const deleteEventMutation = useMutation({
-    mutationFn: (id) => base44.entities.CalendarEvent.delete(id),
+    mutationFn: (id) => api.entities.CalendarEvent.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['calendar-events'] }),
   });
 

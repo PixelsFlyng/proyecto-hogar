@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Check, Calendar, MoreVertical, Edit2, Trash2, User, RefreshCw } from 'lucide-react';
+import { Check, Calendar, MoreVertical, Edit2, Trash2, RefreshCw } from 'lucide-react';
 import { format, parseISO, isPast, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {

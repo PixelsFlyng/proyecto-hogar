@@ -71,7 +71,7 @@ const createEntity = (tableName) => ({
   },
 });
 
-export const base44 = {
+export const api = {
   entities: {
     InventoryItem: createEntity('inventory_items'),
     Recipe: createEntity('recipes'),
@@ -82,6 +82,7 @@ export const base44 = {
     Income: createEntity('income'),
     CustomCategory: createEntity('custom_categories'),
     AppSettings: createEntity('app_settings'),
+    ChartConfig: createEntity('chart_configs'),
   },
   auth: {
     me: async () => {
@@ -100,8 +101,5 @@ export const base44 = {
     inviteUser: async (email) => {
       console.log('Invite not implemented yet for:', email);
     },
-  },
-  appLogs: {
-    logUserInApp: async () => {},
   },
 };
