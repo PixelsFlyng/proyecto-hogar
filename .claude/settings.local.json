@@ -8,7 +8,10 @@
       "Bash(node -e ' *)",
       "Bash(netstat -ano)",
       "Bash(findstr \":5173\\\\|:5174\")",
-      "PowerShell(Get-NetTCPConnection -LocalPort 5173,5174 -ErrorAction SilentlyContinue)"
+      "PowerShell(Get-NetTCPConnection -LocalPort 5173,5174 -ErrorAction SilentlyContinue)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__get_logs",
+      "mcp__claude_ai_Supabase__execute_sql"
     ]
   }
 }
