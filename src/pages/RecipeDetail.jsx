@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { api } from '@/api/apiClient';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Clock, Users, Heart, Edit2, Trash2, Check, ShoppingCart, ChefHat } from 'lucide-react';
@@ -34,6 +35,7 @@ export default function RecipeDetail() {
   const [checkedIngredients, setCheckedIngredients] = useState([]);
   const [cooking, setCooking] = useState(false);
   
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const { data: recipe, isLoading } = useQuery({
@@ -66,7 +68,7 @@ export default function RecipeDetail() {
   const deleteMutation = useMutation({
     mutationFn: () => api.entities.Recipe.delete(recipeId),
     onSuccess: () => {
-      window.location.href = createPageUrl('Food') + '?tab=recipes';
+      navigate(createPageUrl('Food') + '?tab=recipes');
     },
   });
 
@@ -199,7 +201,7 @@ export default function RecipeDetail() {
   };
 
   const goBack = () => {
-    window.location.href = createPageUrl('Food') + '?tab=recipes';
+    navigate(createPageUrl('Food') + '?tab=recipes');
   };
 
   if (isLoading) {

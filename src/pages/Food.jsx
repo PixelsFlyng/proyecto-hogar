@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { api } from '@/api/apiClient';
 import { AnimatePresence } from 'framer-motion';
 import { Plus, Package, BookOpen, Search, Heart, ChefHat } from 'lucide-react';
@@ -39,6 +40,7 @@ export default function Food() {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   useRealtimeQuery('inventory_items', 'inventory');
   useRealtimeQuery('recipes', 'recipes');
@@ -257,7 +259,7 @@ export default function Food() {
                   <RecipeCard
                     key={recipe.id}
                     recipe={recipe}
-                    onClick={() => window.location.href = createPageUrl(`RecipeDetail?id=${recipe.id}`)}
+                    onClick={() => navigate(createPageUrl(`RecipeDetail?id=${recipe.id}`))}
                     onFavorite={handleFavoriteRecipe}
                     isAvailable={availableRecipes.some(r => r.id === recipe.id)}
                   />
