@@ -1,14 +1,34 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 
 const SHEETS_ID = '1ydoIpAzJrPUQ-wiYHiqRLSzF5wltilDrloY_iu34Nj8';
 
 export const useGoogleSheets = () => {
-  const [isConnected, setIsConnected] = useState(false);
+  const [isConnected, setIsConnected] = useState(!!localStorage.getItem('google_access_token'));
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('google_access_token');
-    setIsConnected(!!token);
+    if (localStorage.getItem('google_access_token')) return;
+    // No hay token en localStorage — intentar recuperarlo de la sesión de Supabase
+    const recoverToken = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.provider_token) {
+          localStorage.setItem('google_access_token', session.provider_token);
+          setIsConnected(true);
+          return;
+        }
+        // El getSession no trajo provider_token — intentar refrescar la sesión
+        const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+        if (refreshed?.provider_token) {
+          localStorage.setItem('google_access_token', refreshed.provider_token);
+          setIsConnected(true);
+        }
+      } catch (e) {
+        console.error('No se pudo recuperar el token de Google:', e);
+      }
+    };
+    recoverToken();
   }, []);
 
   const disconnect = () => {
@@ -16,18 +36,56 @@ export const useGoogleSheets = () => {
     setIsConnected(false);
   };
 
+  const reconnect = () => supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.origin,
+      scopes: 'https://www.googleapis.com/auth/spreadsheets',
+      queryParams: { access_type: 'offline', prompt: 'consent' },
+    },
+  });
+
+  const tryRefreshToken = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.refreshSession();
+      if (session?.provider_token) {
+        localStorage.setItem('google_access_token', session.provider_token);
+        setIsConnected(true);
+        return session.provider_token;
+      }
+    } catch (e) {
+      console.error('Falló el refresco del token de Google:', e);
+    }
+    return null;
+  };
+
   const sheetsRequest = async (endpoint, options = {}) => {
-    const token = localStorage.getItem('google_access_token');
+    let token = localStorage.getItem('google_access_token');
     if (!token) throw new Error('No conectado a Google');
-    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}${endpoint}`, {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
-    if (res.status === 401) { disconnect(); throw new Error('Token expirado'); }
+
+    const doFetch = (t) => fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}${endpoint}`,
+      {
+        ...options,
+        headers: {
+          Authorization: `Bearer ${t}`,
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+      }
+    );
+
+    let res = await doFetch(token);
+    if (res.status === 401) {
+      // Intentar refrescar y reintentar antes de desconectar
+      const newToken = await tryRefreshToken();
+      if (newToken) {
+        res = await doFetch(newToken);
+        if (res.status !== 401) return res.json();
+      }
+      disconnect();
+      throw new Error('Token expirado');
+    }
     return res.json();
   };
 
@@ -119,5 +177,5 @@ export const useGoogleSheets = () => {
     } finally { setLoading(false); }
   };
 
-  return { isConnected, loading, disconnect, getMovimientos, getHojaAnual, getComparacion, setComparacionMeses, agregarMovimiento, analizarTicket };
+  return { isConnected, loading, disconnect, reconnect, getMovimientos, getHojaAnual, getComparacion, setComparacionMeses, agregarMovimiento, analizarTicket };
 };
