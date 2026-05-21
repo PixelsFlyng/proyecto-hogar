@@ -662,7 +662,7 @@ export default function Economy() {
       {activeTab === 'mensual' && (
         <motion.button whileTap={{ scale: 0.95 }} onClick={() => setShowAddModal(true)}
           className="fixed right-4 w-14 h-14 bg-stone-900 text-white rounded-full shadow-lg flex items-center justify-center z-40"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom, 20px) + 90px)' }}>
+          style={{ bottom: 'calc(env(safe-area-inset-bottom, 20px) + 80px)' }}>
           <Plus className="w-6 h-6" />
         </motion.button>
       )}
