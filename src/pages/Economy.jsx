@@ -710,7 +710,7 @@ export default function Economy() {
                 <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-stone-100 rounded-full"><X className="w-5 h-5" /></button>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4" style={{ overscrollBehavior: 'contain' }}>
+              <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4" style={{ overscrollBehavior: 'contain' }}>
                 <div className="flex gap-2">
                   <button onClick={() => fileInputRef.current?.click()} disabled={scanningTicket}
                     className="flex items-center gap-2 px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm text-stone-700">
