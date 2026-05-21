@@ -1,51 +1,34 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/api/apiClient';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Plus, TrendingUp, TrendingDown, Receipt, ChevronLeft, ChevronRight,
-  ExternalLink, Camera, RefreshCw, Loader2, X, Check, BarChart3, ArrowUpDown
+  Plus, TrendingUp, TrendingDown, Receipt, ChevronLeft,
+  ExternalLink, RefreshCw, Loader2, X, BarChart3, ArrowUpDown
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import PageHeader from '@/components/common/PageHeader';
 import { useGoogleSheets } from '@/hooks/useGoogleSheets';
+import AddExpenseModal from '@/components/economy/AddExpenseModal';
+import AddIncomeModal from '@/components/economy/AddIncomeModal';
+import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 
 const SHEETS_URL = 'https://docs.google.com/spreadsheets/d/1ydoIpAzJrPUQ-wiYHiqRLSzF5wltilDrloY_iu34Nj8/edit';
-const CATEGORIAS = ['Super', 'Cine', 'Comida Hecha', 'Panadería', 'Bazar', 'Transporte', 'Grido', 'Farmacia', 'Limpieza', 'Juegos', 'Otros'];
-const MEDIOS = ['Visa', 'Mastercard', 'Naranja', 'Transferencia Lean', 'Transferencia Yami', 'Efectivo'];
 const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 const MESES_LARGOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16', '#a855f7'];
 const CURRENT_YEAR = new Date().getFullYear();
-
-const emptyForm = {
-  fecha: format(new Date(), 'yyyy-MM-dd'),
-  tipo: 'Gasto', categoria: 'Super', monto: '', medio: 'Visa',
-  cuotas: '', moneda: 'Pesos', descripcion: '',
-};
 
 const pn = (val) => {
   if (val === null || val === undefined) return 0;
   if (typeof val === 'number') return val;
   return parseFloat(String(val).replace(/[$,]/g, '')) || 0;
 };
-
-const parseDateStr = (str) => {
-  if (!str) return null;
-  try {
-    if (str.includes('/')) {
-      const [d, m, y] = str.split('/');
-      return new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
-    }
-    return parseISO(str);
-  } catch { return null; }
-};
-
-const fmt = (v) => `$${Math.abs(v).toLocaleString('es-AR')}`;
-const fmtSigned = (v) => v < 0 ? `-$${Math.abs(v).toLocaleString('es-AR')}` : `$${v.toLocaleString('es-AR')}`;
 
 const parseAnual = (rows) => {
   if (!rows || rows.length < 22) return null;
@@ -101,6 +84,9 @@ const parseComparacion = (rows) => {
   };
 };
 
+const fmt = (v) => `$${Math.abs(v).toLocaleString('es-AR')}`;
+const fmtSigned = (v) => v < 0 ? `-$${Math.abs(v).toLocaleString('es-AR')}` : `$${v.toLocaleString('es-AR')}`;
+
 const ListPicker = ({ title, selected, onSelect, onClose, items }) => (
   <>
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -126,44 +112,48 @@ const ListPicker = ({ title, selected, onSelect, onClose, items }) => (
 );
 
 export default function Economy() {
-  const { isConnected, reconnect, getMovimientos, getHojaAnual, getComparacion, setComparacionMeses, agregarMovimiento, analizarTicket } = useGoogleSheets();
+  const { isConnected, reconnect, getHojaAnual, getComparacion, setComparacionMeses } = useGoogleSheets();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('mensual');
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [selectedYear, setSelectedYear] = useState(CURRENT_YEAR);
   const [availableYears, setAvailableYears] = useState([CURRENT_YEAR]);
-  const [movimientos, setMovimientos] = useState([]);
   const [anualData, setAnualData] = useState(null);
   const [compareData, setCompareData] = useState(null);
   const [loadingData, setLoadingData] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [formData, setFormData] = useState(emptyForm);
-  const [saving, setSaving] = useState(false);
-  const [scanningTicket, setScanningTicket] = useState(false);
-  const [ticketText, setTicketText] = useState('');
+  const [showAddExpense, setShowAddExpense] = useState(false);
+  const [showAddIncome, setShowAddIncome] = useState(false);
+  const [showFabMenu, setShowFabMenu] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
-  const [showFormDatePicker, setShowFormDatePicker] = useState(false);
   const [compareMes1, setCompareMes1] = useState('Enero');
   const [compareMes2, setCompareMes2] = useState('Abril');
   const [showCmp1Picker, setShowCmp1Picker] = useState(false);
   const [showCmp2Picker, setShowCmp2Picker] = useState(false);
   const [updatingMeses, setUpdatingMeses] = useState(false);
   const [compareMode, setCompareMode] = useState('anual');
-  const fileInputRef = useRef(null);
+
+  useRealtimeQuery('expenses', 'expenses');
+  useRealtimeQuery('income', 'incomes');
+
+  const { data: expenses = [], isLoading: loadingExpenses } = useQuery({
+    queryKey: ['expenses'],
+    queryFn: () => api.entities.Expense.list('-date'),
+  });
+
+  const { data: incomes = [], isLoading: loadingIncomes } = useQuery({
+    queryKey: ['incomes'],
+    queryFn: () => api.entities.Income.list('-date'),
+  });
 
   useEffect(() => {
-    if (isConnected) {
-      loadMovimientos();
-      loadAvailableYears();
-    }
+    if (isConnected) loadAvailableYears();
   }, [isConnected]);
 
-  useEffect(() => { if (isConnected && activeTab === 'mensual') loadMovimientos(); }, [selectedMonth]);
   useEffect(() => { if (isConnected && activeTab === 'anual') loadAnual(); }, [isConnected, activeTab, selectedYear]);
   useEffect(() => { if (isConnected && activeTab === 'comparar') loadComparar(); }, [isConnected, activeTab]);
 
   const loadAvailableYears = async () => {
-    // Obtener lista de hojas del spreadsheet
     try {
       const token = localStorage.getItem('google_access_token');
       const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/1ydoIpAzJrPUQ-wiYHiqRLSzF5wltilDrloY_iu34Nj8?fields=sheets.properties.title`, {
@@ -178,13 +168,6 @@ export default function Economy() {
         .sort((a, b) => b - a);
       if (years.length > 0) setAvailableYears(years);
     } catch (e) { console.error(e); }
-  };
-
-  const loadMovimientos = async () => {
-    setLoadingData(true);
-    try { setMovimientos(await getMovimientos()); }
-    catch (e) { console.error(e); }
-    finally { setLoadingData(false); }
   };
 
   const loadAnual = async () => {
@@ -213,62 +196,52 @@ export default function Economy() {
   const availableMonths = useMemo(() => {
     const seen = new Set();
     const months = [];
-    movimientos.forEach(m => {
-      const d = parseDateStr(m.fecha);
+
+    [...expenses, ...incomes].forEach(item => {
+      const d = item.date ? parseISO(item.date) : null;
       if (d) {
         const key = format(d, 'yyyy-MM');
         if (!seen.has(key)) { seen.add(key); months.push(new Date(d.getFullYear(), d.getMonth(), 1)); }
       }
     });
-    months.sort((a, b) => b - a);
-    if (months.length === 0) {
-      for (let i = 0; i < 12; i++) {
-        const d = new Date(); d.setMonth(d.getMonth() - i); months.push(new Date(d.getFullYear(), d.getMonth(), 1));
-      }
-    }
-    return months;
-  }, [movimientos]);
 
-  const periodMovimientos = movimientos.filter(m => {
-    const d = parseDateStr(m.fecha);
+    for (let i = 0; i < 12; i++) {
+      const d = subMonths(new Date(), i);
+      const key = format(d, 'yyyy-MM');
+      if (!seen.has(key)) { seen.add(key); months.push(new Date(d.getFullYear(), d.getMonth(), 1)); }
+    }
+
+    months.sort((a, b) => b.getTime() - a.getTime());
+    return months;
+  }, [expenses, incomes]);
+
+  const periodExpenses = expenses.filter(e => {
+    const d = e.date ? parseISO(e.date) : null;
     if (!d) return false;
     try { return isWithinInterval(d, { start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) }); }
     catch { return false; }
   });
 
-  const gastosMes = periodMovimientos.filter(m => m.tipo === 'Gasto');
-  const ingresosMes = periodMovimientos.filter(m => m.tipo === 'Ingreso');
-  const totalGastos = gastosMes.reduce((s, m) => s + m.monto, 0);
-  const totalIngresos = ingresosMes.reduce((s, m) => s + m.monto, 0);
+  const periodIncomes = incomes.filter(i => {
+    const d = i.date ? parseISO(i.date) : null;
+    if (!d) return false;
+    try { return isWithinInterval(d, { start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) }); }
+    catch { return false; }
+  });
+
+  const periodMovimientos = useMemo(() => [
+    ...periodExpenses.map(e => ({ id: e.id, tipo: 'Gasto', fecha: e.date, monto: e.amount || 0, descripcion: e.description, categoria: e.category, medio: e.payment_method })),
+    ...periodIncomes.map(i => ({ id: i.id, tipo: 'Ingreso', fecha: i.date, monto: i.amount || 0, descripcion: i.description, categoria: i.category, medio: null })),
+  ].sort((a, b) => {
+    const da = a.fecha ? new Date(a.fecha).getTime() : 0;
+    const db = b.fecha ? new Date(b.fecha).getTime() : 0;
+    return db - da;
+  }), [periodExpenses, periodIncomes]);
+
+  const totalGastos = periodExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+  const totalIngresos = periodIncomes.reduce((s, i) => s + (i.amount || 0), 0);
   const balance = totalIngresos - totalGastos;
 
-  const handleSave = async () => {
-    if (!formData.monto || !formData.fecha) return;
-    setSaving(true);
-    try {
-      await agregarMovimiento(formData);
-      setShowAddModal(false); setFormData(emptyForm); setTicketText('');
-      await loadMovimientos();
-    } catch (e) { console.error(e); }
-    finally { setSaving(false); }
-  };
-
-  const handleTicketScan = async (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    setScanningTicket(true);
-    try {
-      const base64 = await new Promise((res, rej) => {
-        const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file);
-      });
-      const texto = await analizarTicket(base64); setTicketText(texto);
-      const nums = (texto.match(/[\d.,]+/g) || [])
-        .map(n => parseFloat(n.replace(/\./g, '').replace(',', '.'))).filter(n => n > 100 && n < 10000000);
-      if (nums.length > 0) setFormData(f => ({ ...f, monto: Math.max(...nums).toString() }));
-    } catch (e) { console.error(e); }
-    finally { setScanningTicket(false); }
-  };
-
-  // Cards con signo correcto: gastos negativos, balance con signo
   const SummaryCards = ({ gastos, ingresos, bal }) => (
     <div className="grid grid-cols-3 gap-2 mb-4">
       <div className={`rounded-2xl p-3 border ${bal >= 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
@@ -298,50 +271,38 @@ export default function Economy() {
     </div>
   );
 
-  if (!isConnected) {
-    return (
-      <div>
-        <PageHeader title="Economía" subtitle="Google Sheets" />
-        <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-          <div className="w-16 h-16 bg-stone-100 rounded-2xl flex items-center justify-center mb-4">
-            <Receipt className="w-8 h-8 text-stone-400" />
-          </div>
-          <h2 className="text-lg font-semibold text-stone-900 mb-2">Conectá con Google</h2>
-          <p className="text-sm text-stone-500 mb-6">Necesitás conectar tu cuenta de Google para acceder a los datos de economía.</p>
-          <button
-            onClick={reconnect}
-            className="flex items-center gap-2 px-5 py-3 bg-stone-900 text-white rounded-xl text-sm font-medium"
-          >
-            <svg width="16" height="16" viewBox="0 0 18 18">
-              <path fill="#fff" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
-              <path fill="#fff" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/>
-              <path fill="#fff" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18z"/>
-              <path fill="#fff" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/>
-            </svg>
-            Conectar con Google
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="pb-24">
-      <PageHeader title="Economía" subtitle="Google Sheets" />
+      <PageHeader title="Economía" subtitle="Gastos e ingresos" />
 
-      {/* Fila de acciones - siempre visible */}
+      {/* Fila de acciones */}
       <div className="flex gap-2 mb-4">
-        <a href={SHEETS_URL} target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-sm font-medium border border-emerald-100">
-          <ExternalLink className="w-4 h-4" /> Abrir Sheets
-        </a>
-        <button onClick={() => { loadMovimientos(); if (activeTab === 'anual') loadAnual(); if (activeTab === 'comparar') loadComparar(); }}
-          className="flex items-center gap-2 px-3 py-2 bg-stone-50 text-stone-600 rounded-xl text-sm border border-stone-100">
-          <RefreshCw className="w-4 h-4" /> Actualizar
-        </button>
+        {isConnected ? (
+          <>
+            <a href={SHEETS_URL} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-sm font-medium border border-emerald-100">
+              <ExternalLink className="w-4 h-4" /> Abrir Sheets
+            </a>
+            <button onClick={() => { if (activeTab === 'anual') loadAnual(); if (activeTab === 'comparar') loadComparar(); }}
+              className="flex items-center gap-2 px-3 py-2 bg-stone-50 text-stone-600 rounded-xl text-sm border border-stone-100">
+              <RefreshCw className="w-4 h-4" /> Actualizar
+            </button>
+          </>
+        ) : (
+          <button onClick={reconnect}
+            className="flex items-center gap-2 px-3 py-2 bg-stone-50 text-stone-600 rounded-xl text-sm border border-stone-100">
+            <svg width="14" height="14" viewBox="0 0 18 18">
+              <path fill="currentColor" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
+              <path fill="currentColor" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/>
+              <path fill="currentColor" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18z"/>
+              <path fill="currentColor" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/>
+            </svg>
+            Conectar Google (gráficos)
+          </button>
+        )}
       </div>
 
-      {/* Selector de período - siempre en la misma fila, debajo de acciones */}
+      {/* Selector de período */}
       <div className="flex items-center justify-center gap-2 mb-4">
         {activeTab === 'mensual' && (
           <>
@@ -353,7 +314,7 @@ export default function Economy() {
               <span className="font-medium text-stone-900 capitalize">{format(selectedMonth, 'MMMM yyyy', { locale: es })}</span>
             </button>
             <button onClick={() => setSelectedMonth(prev => { const d = new Date(prev); d.setMonth(d.getMonth() + 1); return d; })} className="p-2 rounded-xl hover:bg-stone-100">
-              <ChevronRight className="w-5 h-5 text-stone-600" />
+              <ChevronLeft className="w-5 h-5 text-stone-600 rotate-180" />
             </button>
           </>
         )}
@@ -367,7 +328,7 @@ export default function Economy() {
               <span className="font-medium text-stone-900">{selectedYear}</span>
             </button>
             <button onClick={() => setSelectedYear(y => y + 1)} className="p-2 rounded-xl hover:bg-stone-100">
-              <ChevronRight className="w-5 h-5 text-stone-600" />
+              <ChevronLeft className="w-5 h-5 text-stone-600 rotate-180" />
             </button>
           </>
         )}
@@ -408,8 +369,7 @@ export default function Economy() {
         )}
       </div>
 
-      
-      {/* Cards - solo mensual y anual */}
+      {/* Cards */}
       {activeTab === 'mensual' && (
         <SummaryCards gastos={totalGastos} ingresos={totalIngresos} bal={balance} />
       )}
@@ -417,254 +377,302 @@ export default function Economy() {
         <SummaryCards gastos={anualData.totalAnual} ingresos={anualData.ingresosAnual} bal={anualData.balanceAnual} />
       )}
 
-      {/* Tabs - siempre en el mismo lugar */}
       <Tabs />
 
       {/* CONTENT */}
-      {loadingData ? (
-        <div className="flex items-center justify-center py-16"><Loader2 className="w-8 h-8 text-stone-400 animate-spin" /></div>
-      ) : (
-        <AnimatePresence mode="wait">
-
-          {activeTab === 'mensual' && (
-            <motion.div key="mensual" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              {periodMovimientos.length === 0 ? (
-                <div className="text-center py-12 text-stone-400">
-                  <Receipt className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                  <p className="text-sm">Sin movimientos este mes</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {periodMovimientos.map((m, i) => (
-                    <div key={i} className="bg-white rounded-2xl p-4 border border-stone-100 shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${m.tipo === 'Ingreso' ? 'bg-emerald-100' : 'bg-stone-100'}`}>
-                            {m.tipo === 'Ingreso' ? <TrendingUp className="w-4 h-4 text-emerald-600" /> : <TrendingDown className="w-4 h-4 text-stone-600" />}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-medium text-stone-900 text-sm truncate">{m.descripcion && m.descripcion !== '-' ? m.descripcion : m.categoria}</p>
-                            <p className="text-xs text-stone-400 truncate">
-                              {m.fecha}{m.categoria && m.categoria !== '-' && m.descripcion && m.descripcion !== '-' && ` • ${m.categoria}`}{m.medio && m.medio !== '-' && ` • ${m.medio}`}{m.cuota && m.cuota !== '-' && ` • ${m.cuota}`}
-                            </p>
-                          </div>
+      <AnimatePresence mode="wait">
+        {activeTab === 'mensual' && (
+          <motion.div key="mensual" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            {(loadingExpenses || loadingIncomes) ? (
+              <div className="flex items-center justify-center py-16"><Loader2 className="w-8 h-8 text-stone-400 animate-spin" /></div>
+            ) : periodMovimientos.length === 0 ? (
+              <div className="text-center py-12 text-stone-400">
+                <Receipt className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                <p className="text-sm">Sin movimientos este mes</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {periodMovimientos.map((m, i) => (
+                  <div key={m.id || i} className="bg-white rounded-2xl p-4 border border-stone-100 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${m.tipo === 'Ingreso' ? 'bg-emerald-100' : 'bg-stone-100'}`}>
+                          {m.tipo === 'Ingreso' ? <TrendingUp className="w-4 h-4 text-emerald-600" /> : <TrendingDown className="w-4 h-4 text-stone-600" />}
                         </div>
-                        <span className={`font-bold text-sm flex-shrink-0 ml-2 ${m.tipo === 'Ingreso' ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {m.tipo === 'Ingreso' ? '+' : '-'}{fmt(m.monto)}
-                        </span>
+                        <div className="min-w-0">
+                          <p className="font-medium text-stone-900 text-sm truncate">{m.descripcion || m.categoria || m.tipo}</p>
+                          <p className="text-xs text-stone-400 truncate">
+                            {m.fecha}{m.categoria && ` • ${m.categoria}`}{m.medio && ` • ${m.medio}`}
+                          </p>
+                        </div>
                       </div>
+                      <span className={`font-bold text-sm flex-shrink-0 ml-2 ${m.tipo === 'Ingreso' ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {m.tipo === 'Ingreso' ? '+' : '-'}${Math.abs(m.monto).toLocaleString('es-AR')}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          )}
-
-          {activeTab === 'anual' && (
-            <motion.div key="anual" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              {!anualData ? (
-                <div className="text-center py-12 text-stone-400"><BarChart3 className="w-10 h-10 mx-auto mb-3 opacity-40" /><p className="text-sm">Sin datos para {selectedYear}</p></div>
-              ) : (
-                <>
-                  {/* Gastos e Ingresos por mes - dos líneas */}
-                  <div className="bg-white rounded-2xl p-4 border border-stone-100">
-                    <h3 className="font-semibold text-stone-900 mb-4 text-sm">Gastos e ingresos por mes</h3>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <LineChart data={MESES_CORTOS.map((mes, i) => ({
-                        mes,
-                        Gastos: anualData.totalesMes[i],
-                        Ingresos: anualData.ingresosMes[i],
-                      }))}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                        <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                        <Tooltip formatter={v => [fmt(v), '']} />
-                        <Legend />
-                        <Line type="monotone" dataKey="Gastos" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} />
-                        <Line type="monotone" dataKey="Ingresos" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
                   </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
 
-                  {/* Gastos por categoría */}
+        {activeTab === 'anual' && (
+          <motion.div key="anual" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+            {!isConnected ? (
+              <div className="text-center py-12 text-stone-400">
+                <BarChart3 className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                <p className="text-sm mb-3">Conectá con Google para ver los gráficos anuales</p>
+                <button onClick={reconnect} className="px-4 py-2 bg-stone-900 text-white rounded-xl text-sm">Conectar</button>
+              </div>
+            ) : loadingData ? (
+              <div className="flex items-center justify-center py-16"><Loader2 className="w-8 h-8 text-stone-400 animate-spin" /></div>
+            ) : !anualData ? (
+              <div className="text-center py-12 text-stone-400"><BarChart3 className="w-10 h-10 mx-auto mb-3 opacity-40" /><p className="text-sm">Sin datos para {selectedYear}</p></div>
+            ) : (
+              <>
+                <div className="bg-white rounded-2xl p-4 border border-stone-100">
+                  <h3 className="font-semibold text-stone-900 mb-4 text-sm">Gastos e ingresos por mes</h3>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart data={MESES_CORTOS.map((mes, i) => ({
+                      mes,
+                      Gastos: anualData.totalesMes[i],
+                      Ingresos: anualData.ingresosMes[i],
+                    }))}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                      <Tooltip formatter={v => [fmt(v), '']} />
+                      <Legend />
+                      <Line type="monotone" dataKey="Gastos" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} />
+                      <Line type="monotone" dataKey="Ingresos" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="bg-white rounded-2xl p-4 border border-stone-100">
+                  <h3 className="font-semibold text-stone-900 mb-4 text-sm">Gastos por categoría</h3>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={[...anualData.cats].sort((a, b) => b.total - a.total).map(c => ({ name: c.categoria, total: c.total }))} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={85} />
+                      <Tooltip formatter={v => [fmt(v), 'Total']} />
+                      <Bar dataKey="total" radius={[0, 4, 4, 0]}>
+                        {anualData.cats.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {anualData.medios.filter(m => m.total > 0).length > 0 && (
                   <div className="bg-white rounded-2xl p-4 border border-stone-100">
-                    <h3 className="font-semibold text-stone-900 mb-4 text-sm">Gastos por categoría</h3>
-                    <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={[...anualData.cats].sort((a, b) => b.total - a.total).map(c => ({ name: c.categoria, total: c.total }))} layout="vertical">
+                    <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por medio de pago</h3>
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart data={[...anualData.medios].filter(m => m.total > 0).sort((a, b) => b.total - a.total).map(m => ({ name: m.medio, total: m.total }))} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={85} />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={100} />
                         <Tooltip formatter={v => [fmt(v), 'Total']} />
                         <Bar dataKey="total" radius={[0, 4, 4, 0]}>
-                          {anualData.cats.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                          {anualData.medios.filter(m => m.total > 0).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
+                )}
 
-                  {/* Por medio de pago - barras horizontales en lugar de torta */}
-                  {anualData.medios.filter(m => m.total > 0).length > 0 && (
-                    <div className="bg-white rounded-2xl p-4 border border-stone-100">
-                      <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por medio de pago</h3>
-                      <ResponsiveContainer width="100%" height={180}>
-                        <BarChart data={[...anualData.medios].filter(m => m.total > 0).sort((a, b) => b.total - a.total).map(m => ({ name: m.medio, total: m.total }))} layout="vertical">
-                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                          <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                          <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={100} />
-                          <Tooltip formatter={v => [fmt(v), 'Total']} />
-                          <Bar dataKey="total" radius={[0, 4, 4, 0]}>
-                            {anualData.medios.filter(m => m.total > 0).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
+                <div className="bg-white rounded-2xl p-4 border border-stone-100">
+                  <h3 className="font-semibold text-stone-900 mb-4 text-sm">Evolución por categoría</h3>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={MESES_CORTOS.map((mes, i) => {
+                      const obj = { mes };
+                      anualData.cats.forEach(c => { if (c.meses[i] > 0) obj[c.categoria] = c.meses[i]; });
+                      return obj;
+                    })}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                      <Tooltip formatter={v => [fmt(v), '']} />
+                      {anualData.cats.map((c, i) => <Bar key={c.categoria} dataKey={c.categoria} stackId="a" fill={COLORS[i % COLORS.length]} />)}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </>
+            )}
+          </motion.div>
+        )}
 
-                  {/* Evolución por categoría apilada */}
-                  <div className="bg-white rounded-2xl p-4 border border-stone-100">
-                    <h3 className="font-semibold text-stone-900 mb-4 text-sm">Evolución por categoría</h3>
-                    <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={MESES_CORTOS.map((mes, i) => {
-                        const obj = { mes };
-                        anualData.cats.forEach(c => { if (c.meses[i] > 0) obj[c.categoria] = c.meses[i]; });
-                        return obj;
-                      })}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                        <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                        <Tooltip formatter={v => [fmt(v), '']} />
-                        {anualData.cats.map((c, i) => <Bar key={c.categoria} dataKey={c.categoria} stackId="a" fill={COLORS[i % COLORS.length]} />)}
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </>
-              )}
-            </motion.div>
-          )}
-
-          {activeTab === 'comparar' && (
-            <motion.div key="comparar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-              {/* Toggle anual/meses */}
-              <div className="flex gap-1 p-1 bg-stone-100 rounded-xl">
-                <button onClick={() => setCompareMode('anual')}
-                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${compareMode === 'anual' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>
-                  Por año
-                </button>
-                <button onClick={() => setCompareMode('meses')}
-                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${compareMode === 'meses' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>
-                  Por mes
-                </button>
+        {activeTab === 'comparar' && (
+          <motion.div key="comparar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+            {!isConnected ? (
+              <div className="text-center py-12 text-stone-400">
+                <ArrowUpDown className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                <p className="text-sm mb-3">Conectá con Google para comparar períodos</p>
+                <button onClick={reconnect} className="px-4 py-2 bg-stone-900 text-white rounded-xl text-sm">Conectar</button>
               </div>
+            ) : (
+              <>
+                <div className="flex gap-1 p-1 bg-stone-100 rounded-xl">
+                  <button onClick={() => setCompareMode('anual')}
+                    className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${compareMode === 'anual' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>
+                    Por año
+                  </button>
+                  <button onClick={() => setCompareMode('meses')}
+                    className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${compareMode === 'meses' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>
+                    Por mes
+                  </button>
+                </div>
 
-              {compareMode === 'anual' && compareData && (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 text-center">
-                      <p className="text-xs text-indigo-500 mb-1">{compareData.year1}</p>
-                      <p className="text-lg font-bold text-indigo-700">-{fmt(compareData.totGastoAnual1)}</p>
-                    </div>
-                    <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 text-center">
-                      <p className="text-xs text-amber-500 mb-1">{compareData.year2}</p>
-                      <p className="text-lg font-bold text-amber-700">-{fmt(compareData.totGastoAnual2)}</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-2xl p-4 border border-stone-100">
-                    <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por categoría</h3>
-                    <ResponsiveContainer width="100%" height={260}>
-                      <BarChart layout="vertical" data={compareData.catsAnual.map(c => ({ name: c.categoria, [compareData.year1]: c.val1, [compareData.year2]: c.val2 }))}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                        <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={85} />
-                        <Tooltip formatter={v => [fmt(v), '']} />
-                        <Legend />
-                        <Bar dataKey={String(compareData.year1)} fill="#6366f1" radius={[0, 4, 4, 0]} />
-                        <Bar dataKey={String(compareData.year2)} fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  <div className="bg-white rounded-2xl p-4 border border-stone-100">
-                    <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por medio de pago</h3>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart layout="vertical" data={compareData.mediosAnual.map(m => ({ name: m.medio, [compareData.year1]: m.val1, [compareData.year2]: m.val2 }))}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                        <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                        <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={100} />
-                        <Tooltip formatter={v => [fmt(v), '']} />
-                        <Legend />
-                        <Bar dataKey={String(compareData.year1)} fill="#6366f1" radius={[0, 4, 4, 0]} />
-                        <Bar dataKey={String(compareData.year2)} fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </>
-              )}
-
-              {compareMode === 'meses' && compareData && (
-                <>
-                  {updatingMeses ? (
-                    <div className="flex items-center justify-center gap-2 py-8 text-stone-400 text-sm">
-                      <Loader2 className="w-4 h-4 animate-spin" /> Actualizando...
-                    </div>
-                  ) : (
-                    <>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 text-center">
-                          <p className="text-xs text-indigo-500 mb-1">{compareData.mes1}</p>
-                          <p className="text-lg font-bold text-indigo-700">-{fmt(compareData.totGastoMes1)}</p>
+                {loadingData ? (
+                  <div className="flex items-center justify-center py-16"><Loader2 className="w-8 h-8 text-stone-400 animate-spin" /></div>
+                ) : (
+                  <>
+                    {compareMode === 'anual' && compareData && (
+                      <>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 text-center">
+                            <p className="text-xs text-indigo-500 mb-1">{compareData.year1}</p>
+                            <p className="text-lg font-bold text-indigo-700">-{fmt(compareData.totGastoAnual1)}</p>
+                          </div>
+                          <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 text-center">
+                            <p className="text-xs text-amber-500 mb-1">{compareData.year2}</p>
+                            <p className="text-lg font-bold text-amber-700">-{fmt(compareData.totGastoAnual2)}</p>
+                          </div>
                         </div>
-                        <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 text-center">
-                          <p className="text-xs text-amber-500 mb-1">{compareData.mes2}</p>
-                          <p className="text-lg font-bold text-amber-700">-{fmt(compareData.totGastoMes2)}</p>
+
+                        <div className="bg-white rounded-2xl p-4 border border-stone-100">
+                          <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por categoría</h3>
+                          <ResponsiveContainer width="100%" height={260}>
+                            <BarChart layout="vertical" data={compareData.catsAnual.map(c => ({ name: c.categoria, [compareData.year1]: c.val1, [compareData.year2]: c.val2 }))}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                              <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                              <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={85} />
+                              <Tooltip formatter={v => [fmt(v), '']} />
+                              <Legend />
+                              <Bar dataKey={String(compareData.year1)} fill="#6366f1" radius={[0, 4, 4, 0]} />
+                              <Bar dataKey={String(compareData.year2)} fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
                         </div>
-                      </div>
 
-                      <div className="bg-white rounded-2xl p-4 border border-stone-100">
-                        <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por categoría</h3>
-                        <ResponsiveContainer width="100%" height={260}>
-                          <BarChart layout="vertical" data={compareData.catsMes.map(c => ({ name: c.categoria, [compareData.mes1]: c.val1, [compareData.mes2]: c.val2 }))}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                            <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={85} />
-                            <Tooltip formatter={v => [fmt(v), '']} />
-                            <Legend />
-                            <Bar dataKey={compareData.mes1} fill="#6366f1" radius={[0, 4, 4, 0]} />
-                            <Bar dataKey={compareData.mes2} fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
+                        <div className="bg-white rounded-2xl p-4 border border-stone-100">
+                          <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por medio de pago</h3>
+                          <ResponsiveContainer width="100%" height={200}>
+                            <BarChart layout="vertical" data={compareData.mediosAnual.map(m => ({ name: m.medio, [compareData.year1]: m.val1, [compareData.year2]: m.val2 }))}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                              <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                              <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={100} />
+                              <Tooltip formatter={v => [fmt(v), '']} />
+                              <Legend />
+                              <Bar dataKey={String(compareData.year1)} fill="#6366f1" radius={[0, 4, 4, 0]} />
+                              <Bar dataKey={String(compareData.year2)} fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </>
+                    )}
 
-                      <div className="bg-white rounded-2xl p-4 border border-stone-100">
-                        <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por medio de pago</h3>
-                        <ResponsiveContainer width="100%" height={200}>
-                          <BarChart layout="vertical" data={compareData.mediosMes.map(m => ({ name: m.medio, [compareData.mes1]: m.val1, [compareData.mes2]: m.val2 }))}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                            <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                            <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={100} />
-                            <Tooltip formatter={v => [fmt(v), '']} />
-                            <Legend />
-                            <Bar dataKey={compareData.mes1} fill="#6366f1" radius={[0, 4, 4, 0]} />
-                            <Bar dataKey={compareData.mes2} fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      )}
+                    {compareMode === 'meses' && compareData && (
+                      <>
+                        {updatingMeses ? (
+                          <div className="flex items-center justify-center gap-2 py-8 text-stone-400 text-sm">
+                            <Loader2 className="w-4 h-4 animate-spin" /> Actualizando...
+                          </div>
+                        ) : (
+                          <>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 text-center">
+                                <p className="text-xs text-indigo-500 mb-1">{compareData.mes1}</p>
+                                <p className="text-lg font-bold text-indigo-700">-{fmt(compareData.totGastoMes1)}</p>
+                              </div>
+                              <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 text-center">
+                                <p className="text-xs text-amber-500 mb-1">{compareData.mes2}</p>
+                                <p className="text-lg font-bold text-amber-700">-{fmt(compareData.totGastoMes2)}</p>
+                              </div>
+                            </div>
 
-      {/* FAB */}
+                            <div className="bg-white rounded-2xl p-4 border border-stone-100">
+                              <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por categoría</h3>
+                              <ResponsiveContainer width="100%" height={260}>
+                                <BarChart layout="vertical" data={compareData.catsMes.map(c => ({ name: c.categoria, [compareData.mes1]: c.val1, [compareData.mes2]: c.val2 }))}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                                  <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={85} />
+                                  <Tooltip formatter={v => [fmt(v), '']} />
+                                  <Legend />
+                                  <Bar dataKey={compareData.mes1} fill="#6366f1" radius={[0, 4, 4, 0]} />
+                                  <Bar dataKey={compareData.mes2} fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+
+                            <div className="bg-white rounded-2xl p-4 border border-stone-100">
+                              <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por medio de pago</h3>
+                              <ResponsiveContainer width="100%" height={200}>
+                                <BarChart layout="vertical" data={compareData.mediosMes.map(m => ({ name: m.medio, [compareData.mes1]: m.val1, [compareData.mes2]: m.val2 }))}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                                  <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={100} />
+                                  <Tooltip formatter={v => [fmt(v), '']} />
+                                  <Legend />
+                                  <Bar dataKey={compareData.mes1} fill="#6366f1" radius={[0, 4, 4, 0]} />
+                                  <Bar dataKey={compareData.mes2} fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* FAB con speed-dial */}
       {activeTab === 'mensual' && (
-        <motion.button whileTap={{ scale: 0.95 }} onClick={() => setShowAddModal(true)}
-          className="fixed right-4 w-14 h-14 bg-stone-900 text-white rounded-full shadow-lg flex items-center justify-center z-40"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom, 20px) + 80px)' }}>
-          <Plus className="w-6 h-6" />
-        </motion.button>
+        <>
+          <AnimatePresence>
+            {showFabMenu && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-30"
+                  onClick={() => setShowFabMenu(false)}
+                />
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
+                  className="fixed right-4 flex flex-col items-end gap-2 z-40"
+                  style={{ bottom: 'calc(env(safe-area-inset-bottom, 20px) + 160px)' }}>
+                  <button
+                    onClick={() => { setShowFabMenu(false); setShowAddIncome(true); }}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-full shadow-lg text-sm font-medium">
+                    <TrendingUp className="w-4 h-4" /> Ingreso
+                  </button>
+                  <button
+                    onClick={() => { setShowFabMenu(false); setShowAddExpense(true); }}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-red-500 text-white rounded-full shadow-lg text-sm font-medium">
+                    <TrendingDown className="w-4 h-4" /> Gasto
+                  </button>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowFabMenu(v => !v)}
+            className="fixed right-4 w-14 h-14 bg-stone-900 text-white rounded-full shadow-lg flex items-center justify-center z-40"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom, 20px) + 80px)' }}>
+            <motion.div animate={{ rotate: showFabMenu ? 45 : 0 }} transition={{ duration: 0.2 }}>
+              <Plus className="w-6 h-6" />
+            </motion.div>
+          </motion.button>
+        </>
       )}
 
       {/* Pickers */}
@@ -696,147 +704,16 @@ export default function Economy() {
         )}
       </AnimatePresence>
 
-      {/* Modal agregar movimiento */}
-      <AnimatePresence>
-        {showAddModal && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" onClick={() => setShowAddModal(false)} />
-            <motion.div initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 100 }}
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 flex flex-col"
-              style={{ maxHeight: '92vh', height: '92vh' }}>
-              <div className="flex-shrink-0 px-6 py-4 border-b border-stone-100 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-stone-900">Nuevo movimiento</h2>
-                <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-stone-100 rounded-full"><X className="w-5 h-5" /></button>
-              </div>
-
-              <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4" style={{ overscrollBehavior: 'contain' }}>
-                <div className="flex gap-2">
-                  <button onClick={() => fileInputRef.current?.click()} disabled={scanningTicket}
-                    className="flex items-center gap-2 px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm text-stone-700">
-                    {scanningTicket ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-                    {scanningTicket ? 'Leyendo...' : 'Foto ticket'}
-                  </button>
-                  <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleTicketScan} />
-                  {ticketText && <div className="flex-1 px-3 py-2 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-700 flex items-center">✓ Ticket leído — revisá el monto</div>}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-stone-700">Tipo *</label>
-                  <div className="flex gap-2">
-                    {['Gasto', 'Ingreso'].map(t => (
-                      <button key={t} type="button" onClick={() => setFormData(f => ({ ...f, tipo: t }))}
-                        className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${formData.tipo === t ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'}`}>
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-stone-700">Fecha *</label>
-                  <button onClick={() => setShowFormDatePicker(true)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm text-left text-stone-900 bg-white">
-                    {formData.fecha ? format(parseISO(formData.fecha), "d 'de' MMMM yyyy", { locale: es }) : 'Elegir fecha'}
-                  </button>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-stone-700">Monto *</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 text-sm">$</span>
-                    <input type="number" value={formData.monto}
-                      onChange={e => setFormData(f => ({ ...f, monto: e.target.value }))}
-                      placeholder="0.00" className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-stone-200 text-sm" />
-                  </div>
-                </div>
-
-                {formData.tipo === 'Gasto' && (
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-stone-700">Categoría *</label>
-                    <div className="flex flex-wrap gap-2">
-                      {CATEGORIAS.map(c => (
-                        <button key={c} type="button" onClick={() => setFormData(f => ({ ...f, categoria: c }))}
-                          className={`px-3 py-1.5 rounded-xl text-xs transition-all ${formData.categoria === c ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'}`}>
-                          {c}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {formData.tipo === 'Gasto' && (
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-stone-700">Medio de pago *</label>
-                    <div className="flex flex-wrap gap-2">
-                      {MEDIOS.map(m => (
-                        <button key={m} type="button" onClick={() => setFormData(f => ({ ...f, medio: m }))}
-                          className={`px-3 py-1.5 rounded-xl text-xs transition-all ${formData.medio === m ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'}`}>
-                          {m}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {formData.tipo === 'Gasto' && (
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-stone-700">Cuotas (opcional)</label>
-                    <input type="number" min="1" value={formData.cuotas}
-                      onChange={e => setFormData(f => ({ ...f, cuotas: e.target.value }))}
-                      placeholder="1" className="w-24 px-4 py-2.5 rounded-xl border border-stone-200 text-sm" />
-                  </div>
-                )}
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-stone-700">Moneda</label>
-                  <div className="flex gap-2">
-                    {['Pesos', 'Dolares'].map(m => (
-                      <button key={m} type="button" onClick={() => setFormData(f => ({ ...f, moneda: m }))}
-                        className={`px-4 py-2 rounded-xl text-sm transition-all ${formData.moneda === m ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600'}`}>
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium text-stone-700">Descripción (opcional)</label>
-                  <input type="text" value={formData.descripcion}
-                    onChange={e => setFormData(f => ({ ...f, descripcion: e.target.value }))}
-                    placeholder="Ej: Supermercado Día" className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm" />
-                </div>
-              </div>
-
-              {/* Botón SIEMPRE visible abajo */}
-              <div className="flex-shrink-0 px-6 py-4 border-t border-stone-100 bg-white">
-                <button onClick={handleSave} disabled={saving || !formData.monto || !formData.fecha}
-                  className="w-full py-3 rounded-xl bg-stone-900 text-white font-medium text-sm disabled:opacity-50 flex items-center justify-center gap-2">
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  {saving ? 'Guardando...' : 'Agregar movimiento'}
-                </button>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Picker fecha del formulario */}
-      <AnimatePresence>
-        {showFormDatePicker && (
-          <ListPicker
-            title="Elegir mes"
-            selected={formData.fecha ? format(parseISO(formData.fecha), 'MMMM yyyy', { locale: es }) : ''}
-            items={availableMonths.map(d => format(d, 'MMMM yyyy', { locale: es }))}
-            onSelect={(label) => {
-              const found = availableMonths.find(d => format(d, 'MMMM yyyy', { locale: es }) === label);
-              if (found) setFormData(f => ({ ...f, fecha: format(found, 'yyyy-MM-dd') }));
-              setShowFormDatePicker(false);
-            }}
-            onClose={() => setShowFormDatePicker(false)}
-          />
-        )}
-      </AnimatePresence>
+      <AddExpenseModal
+        isOpen={showAddExpense}
+        onClose={() => setShowAddExpense(false)}
+        onSave={() => {}}
+      />
+      <AddIncomeModal
+        isOpen={showAddIncome}
+        onClose={() => setShowAddIncome(false)}
+        onSave={() => {}}
+      />
     </div>
   );
 }
