@@ -190,3 +190,12 @@ Antes de dar por terminado un cambio: `npm run lint && npm run build`.
 - **No** asumir layout de desktop — todo se diseña para una columna `max-w-lg` con bottom nav fijo.
 - **No** romper el contrato de `getOwnerId` (todo insert necesita `user_id = ownerId`); ya lo hace el wrapper en `create`, así que no hace falta pasar `user_id` desde el llamador.
 - **No** agregar dependencias pesadas sin necesidad — el bundle ya es grande (three, leaflet, quill, jspdf, html2canvas).
+
+## Pendientes
+
+- [ ] **Categorías de gastos desde Sheets** — importar/sincronizar las categorías que ya existen en el Google Sheet para usarlas en `AddExpenseModal` (sección Economía).
+- [ ] **Métodos de pago desde Sheets** — ídem para los medios de pago existentes en el Sheet.
+- [ ] **Gráficos en tab Mensual** — agregar gráficos de categorías (y posiblemente medios de pago) para el período mensual seleccionado, similar a los del tab Anual.
+- [ ] **Tooltip de evolución por categoría** — en el gráfico "Evolución por categoría" (tab Anual, `Economy.jsx`), el tooltip solo muestra el monto; agregar el nombre de la categoría también.
+- [ ] **Posición del selector Mensual/Anual/Comparar** — ajustar layout en el tab Comparar donde el selector de período y las tabs quedan mal posicionadas.
+- [ ] **Nuevos gráficos** — evaluar qué otros gráficos aportan valor: tendencia de balance mes a mes, top 5 categorías del mes, comparación ingreso vs gasto acumulado, etc.

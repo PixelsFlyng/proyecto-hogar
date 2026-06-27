@@ -148,15 +148,62 @@ export const useGoogleSheets = () => {
     return await getComparacion();
   };
 
+  const findRowBySupabaseId = async (supabaseId) => {
+    const data = await sheetsRequest('/values/Movimientos!J:J');
+    const values = data.values || [];
+    for (let i = 1; i < values.length; i++) {
+      if (values[i]?.[0] === supabaseId) return i + 1; // 1-indexed
+    }
+    return null;
+  };
+
+  const actualizarMovimiento = async (supabaseId, movimiento) => {
+    const rowNum = await findRowBySupabaseId(supabaseId);
+    if (!rowNum) return;
+    const fila = [
+      movimiento.fecha, movimiento.tipo, movimiento.categoria,
+      movimiento.monto, movimiento.medio || '-',
+      movimiento.cuota || '-', movimiento.moneda || 'Pesos',
+      movimiento.descripcion || '-',
+      'synced',
+      supabaseId,
+    ];
+    await sheetsRequest(
+      `/values/Movimientos!A${rowNum}:J${rowNum}?valueInputOption=USER_ENTERED`,
+      { method: 'PUT', body: JSON.stringify({ values: [fila] }) }
+    );
+  };
+
+  const eliminarMovimiento = async (supabaseId) => {
+    const rowNum = await findRowBySupabaseId(supabaseId);
+    if (!rowNum) return;
+    let token = localStorage.getItem('google_access_token');
+    const metaRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}?fields=sheets.properties`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const meta = await metaRes.json();
+    const sheet = (meta.sheets || []).find(s => s.properties.title === 'Movimientos');
+    const sheetId = sheet?.properties?.sheetId ?? 0;
+    await sheetsRequest(':batchUpdate', {
+      method: 'POST',
+      body: JSON.stringify({
+        requests: [{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: rowNum - 1, endIndex: rowNum } } }]
+      })
+    });
+  };
+
   const agregarMovimiento = async (movimiento) => {
     const fila = [
       movimiento.fecha, movimiento.tipo, movimiento.categoria,
       movimiento.monto, movimiento.medio || '-',
       movimiento.cuota || '-', movimiento.moneda || 'Pesos',
       movimiento.descripcion || '-',
+      'synced',                    // col I: marca para el Apps Script
+      movimiento.supabaseId || '', // col J: ID de Supabase para updates
     ];
     return await sheetsRequest(
-      '/values/Movimientos!A:H:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS',
+      '/values/Movimientos!A:J:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS',
       { method: 'POST', body: JSON.stringify({ values: [fila] }) }
     );
   };
@@ -177,5 +224,5 @@ export const useGoogleSheets = () => {
     } finally { setLoading(false); }
   };
 
-  return { isConnected, loading, disconnect, reconnect, getMovimientos, getHojaAnual, getComparacion, setComparacionMeses, agregarMovimiento, analizarTicket };
+  return { isConnected, loading, disconnect, reconnect, getMovimientos, getHojaAnual, getComparacion, setComparacionMeses, agregarMovimiento, actualizarMovimiento, eliminarMovimiento, analizarTicket };
 };

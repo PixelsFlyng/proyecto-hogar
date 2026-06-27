@@ -12,21 +12,30 @@ import { format, addMonths, parseISO, isBefore } from 'date-fns';
 
 const EMOJI_OPTIONS = ['💵', '💰', '🏦', '💳', '📈', '🎁', '💼', '🏠'];
 
-export default function AddIncomeModal({ isOpen, onClose, onSave }) {
-  const [formData, setFormData] = useState({
-    description: '',
-    amount: '',
-    category: '',
-    date: format(new Date(), 'yyyy-MM-dd'),
-    is_recurring: false,
-    recurrence_end: 'indefinido',
-    recurrence_months: 12,
-    recurrence_end_date: ''
-  });
+const EMPTY_INCOME_FORM = {
+  description: '', amount: '', category: '',
+  date: format(new Date(), 'yyyy-MM-dd'),
+  is_recurring: false, recurrence_end: 'indefinido',
+  recurrence_months: 12, recurrence_end_date: ''
+};
+
+export default function AddIncomeModal({ isOpen, onClose, onSave, initialData = /** @type {any} */ (null), editId = /** @type {string|null} */ (null) }) {
+  const [formData, setFormData] = useState(EMPTY_INCOME_FORM);
 
   useEffect(() => {
-    if (isOpen) document.body.style.overflow = 'hidden';
-    else document.body.style.overflow = '';
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      setFormData(initialData ? {
+        description: initialData.description || '',
+        amount: initialData.amount ? String(initialData.amount) : '',
+        category: initialData.category || '',
+        date: initialData.date || format(new Date(), 'yyyy-MM-dd'),
+        is_recurring: false,
+        recurrence_end: 'indefinido', recurrence_months: 12, recurrence_end_date: ''
+      } : EMPTY_INCOME_FORM);
+    } else {
+      document.body.style.overflow = '';
+    }
     return () => { document.body.style.overflow = ''; };
   }, [isOpen]);
   const [showNewCategory, setShowNewCategory] = useState(false);
@@ -71,46 +80,30 @@ export default function AddIncomeModal({ isOpen, onClose, onSave }) {
       recurrence_end_date: formData.is_recurring && formData.recurrence_end === 'fecha' ? formData.recurrence_end_date : null
     };
 
-    // Create main income
-    const mainIncome = await api.entities.Income.create(baseIncome);
-
-    // If recurring, create future incomes
-    if (formData.is_recurring) {
-      const startDate = parseISO(formData.date);
-      let endDate;
-
-      if (formData.recurrence_end === 'indefinido') {
-        endDate = addMonths(startDate, 24); // Create 2 years ahead
-      } else if (formData.recurrence_end === 'meses') {
-        endDate = addMonths(startDate, formData.recurrence_months);
-      } else if (formData.recurrence_end === 'fecha' && formData.recurrence_end_date) {
-        endDate = parseISO(formData.recurrence_end_date);
-      }
-
-      if (endDate) {
-        let currentDate = addMonths(startDate, 1);
-        while (isBefore(currentDate, endDate)) {
-          await api.entities.Income.create({
-            ...baseIncome,
-            date: format(currentDate, 'yyyy-MM-dd'),
-            parent_id: mainIncome.id
-          });
-          currentDate = addMonths(currentDate, 1);
+    let result;
+    if (editId) {
+      result = await api.entities.Income.update(editId, baseIncome);
+    } else {
+      result = await api.entities.Income.create(baseIncome);
+      if (formData.is_recurring) {
+        const startDate = parseISO(formData.date);
+        let endDate;
+        if (formData.recurrence_end === 'indefinido') endDate = addMonths(startDate, 24);
+        else if (formData.recurrence_end === 'meses') endDate = addMonths(startDate, formData.recurrence_months);
+        else if (formData.recurrence_end === 'fecha' && formData.recurrence_end_date) endDate = parseISO(formData.recurrence_end_date);
+        if (endDate) {
+          let currentDate = addMonths(startDate, 1);
+          while (isBefore(currentDate, endDate)) {
+            await api.entities.Income.create({ ...baseIncome, date: format(currentDate, 'yyyy-MM-dd'), parent_id: result.id });
+            currentDate = addMonths(currentDate, 1);
+          }
         }
       }
     }
 
     queryClient.invalidateQueries({ queryKey: ['incomes'] });
-    setFormData({
-      description: '',
-      amount: '',
-      category: '',
-      date: format(new Date(), 'yyyy-MM-dd'),
-      is_recurring: false,
-      recurrence_end: 'indefinido',
-      recurrence_months: 12,
-      recurrence_end_date: ''
-    });
+    onSave && onSave(result);
+    setFormData(EMPTY_INCOME_FORM);
     onClose();
   };
 
@@ -133,7 +126,7 @@ export default function AddIncomeModal({ isOpen, onClose, onSave }) {
           style={{ bottom: 'calc(50px + env(safe-area-inset-bottom, 0px))', maxHeight: 'calc(85vh - 50px)' }}>
 
             <div className="flex-shrink-0 px-6 py-4 border-b border-stone-100 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-stone-900">Nuevo ingreso</h2>
+              <h2 className="text-lg font-semibold text-stone-900">{editId ? 'Editar ingreso' : 'Nuevo ingreso'}</h2>
               <button onClick={onClose} className="p-2 hover:bg-stone-100 rounded-full">
                 <X className="w-5 h-5" />
               </button>
@@ -268,7 +261,7 @@ export default function AddIncomeModal({ isOpen, onClose, onSave }) {
                 }
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-xl">
+                {!editId && <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-xl">
                   <div>
                     <p className="font-medium text-emerald-900">Ingreso recurrente</p>
                     <p className="text-sm text-emerald-600">Se repite cada mes</p>
@@ -276,10 +269,9 @@ export default function AddIncomeModal({ isOpen, onClose, onSave }) {
                   <Switch
                   checked={formData.is_recurring}
                   onCheckedChange={(checked) => setFormData({ ...formData, is_recurring: checked })} />
+                </div>}
 
-                </div>
-
-                {formData.is_recurring &&
+                {!editId && formData.is_recurring &&
               <div className="space-y-3 p-4 bg-emerald-50 rounded-xl">
                     <Label>¿Hasta cuándo se repite?</Label>
                     <div className="flex gap-2">
@@ -328,7 +320,7 @@ export default function AddIncomeModal({ isOpen, onClose, onSave }) {
                 className="w-full rounded-xl h-12 bg-emerald-600 hover:bg-emerald-700"
                 disabled={!formData.amount || !formData.date}>
 
-                  Agregar ingreso
+                  {editId ? 'Guardar cambios' : 'Agregar ingreso'}
                 </Button>
               </form>
             </ScrollArea>

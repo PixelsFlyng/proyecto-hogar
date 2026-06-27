@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useState, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Plus, TrendingUp, TrendingDown, Receipt, ChevronLeft,
-  ExternalLink, RefreshCw, Loader2, X, BarChart3, ArrowUpDown
+  ExternalLink, Loader2, X, BarChart3, ArrowUpDown, Pencil, Trash2
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, Cell,
@@ -20,72 +20,93 @@ import { useRealtimeQuery } from '@/hooks/useRealtimeQuery';
 
 const SHEETS_URL = 'https://docs.google.com/spreadsheets/d/1ydoIpAzJrPUQ-wiYHiqRLSzF5wltilDrloY_iu34Nj8/edit';
 const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-const MESES_LARGOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16', '#a855f7'];
 const CURRENT_YEAR = new Date().getFullYear();
 
-const pn = (val) => {
-  if (val === null || val === undefined) return 0;
-  if (typeof val === 'number') return val;
-  return parseFloat(String(val).replace(/[$,]/g, '')) || 0;
-};
+const fmt = (v) => `$${Math.abs(v).toLocaleString('es-AR')}`;
+const fmtSigned = (v) => v < 0 ? `-$${Math.abs(v).toLocaleString('es-AR')}` : `$${v.toLocaleString('es-AR')}`;
 
-const parseAnual = (rows) => {
-  if (!rows || rows.length < 22) return null;
-  const ingresosAnual = pn(rows[2]?.[13]);
-  const ingresosMes = MESES_CORTOS.map((_, j) => pn(rows[2]?.[j + 1]));
-  const balanceAnual = pn(rows[6]?.[13]);
-  const balanceMes = MESES_CORTOS.map((_, j) => pn(rows[6]?.[j + 1]));
-  const cats = rows.slice(10, 21).map(row => ({
-    categoria: row?.[0] || '',
-    meses: MESES_CORTOS.map((_, j) => pn(row?.[j + 1])),
-    total: pn(row?.[13]),
-  })).filter(c => c.categoria);
-  const totalesMes = MESES_CORTOS.map((_, j) => pn(rows[21]?.[j + 1]));
-  const totalAnual = pn(rows[21]?.[13]);
-  const medios = rows.slice(25, 31).map(row => ({
-    medio: row?.[0] || '',
-    meses: MESES_CORTOS.map((_, j) => pn(row?.[j + 1])),
-    total: pn(row?.[13]),
-  })).filter(m => m.medio);
-  return { ingresosAnual, ingresosMes, balanceAnual, balanceMes, cats, totalesMes, totalAnual, medios };
-};
+const computeAnualData = (/** @type {any[]} */ expenses, /** @type {any[]} */ incomes, /** @type {number} */ year) => {
+  const yExp = expenses.filter(/** @type {(e: any) => boolean} */ e => e.date && new Date(e.date).getFullYear() === year);
+  const yInc = incomes.filter(/** @type {(i: any) => boolean} */ i => i.date && new Date(i.date).getFullYear() === year);
+  const totalesMes = Array(12).fill(0);
+  const ingresosMes = Array(12).fill(0);
+  const catMap = /** @type {Record<string, {categoria: string, meses: number[], total: number}>} */ ({});
+  const medioMap = /** @type {Record<string, {medio: string, meses: number[], total: number}>} */ ({});
 
-const parseComparacion = (rows) => {
-  if (!rows || rows.length < 22) return null;
-  const year1 = pn(rows[0]?.[1]);
-  const year2 = pn(rows[0]?.[2]);
-  const mes1 = rows[1]?.[7] || '';
-  const mes2 = rows[1]?.[8] || '';
-  const ingAnual1 = pn(rows[3]?.[1]); const ingAnual2 = pn(rows[3]?.[2]);
-  const ingMes1 = pn(rows[3]?.[7]); const ingMes2 = pn(rows[3]?.[8]);
-  const balAnual1 = pn(rows[7]?.[1]); const balAnual2 = pn(rows[7]?.[2]);
-  const balMes1 = pn(rows[7]?.[7]); const balMes2 = pn(rows[7]?.[8]);
-  const catsAnual = rows.slice(11, 22).map(row => ({
-    categoria: row?.[0] || '', val1: pn(row?.[1]), val2: pn(row?.[2]),
-  })).filter(c => c.categoria);
-  const catsMes = rows.slice(11, 22).map(row => ({
-    categoria: row?.[0] || '', val1: pn(row?.[7]), val2: pn(row?.[8]),
-  })).filter(c => c.categoria);
-  const totGastoAnual1 = pn(rows[22]?.[1]); const totGastoAnual2 = pn(rows[22]?.[2]);
-  const totGastoMes1 = pn(rows[22]?.[7]); const totGastoMes2 = pn(rows[22]?.[8]);
-  const mediosAnual = rows.slice(26, 32).map(row => ({
-    medio: row?.[0] || '', val1: pn(row?.[1]), val2: pn(row?.[2]),
-  })).filter(m => m.medio);
-  const mediosMes = rows.slice(26, 32).map(row => ({
-    medio: row?.[0] || '', val1: pn(row?.[7]), val2: pn(row?.[8]),
-  })).filter(m => m.medio);
+  yExp.forEach((/** @type {any} */ e) => {
+    const m = new Date(e.date).getMonth();
+    const a = e.amount || 0;
+    totalesMes[m] += a;
+    const cat = e.category || 'Sin Categoría';
+    if (!catMap[cat]) catMap[cat] = { categoria: cat, meses: Array(12).fill(0), total: 0 };
+    catMap[cat].meses[m] += a;
+    catMap[cat].total += a;
+    const medio = e.payment_method || 'Otro';
+    if (!medioMap[medio]) medioMap[medio] = { medio, meses: Array(12).fill(0), total: 0 };
+    medioMap[medio].meses[m] += a;
+    medioMap[medio].total += a;
+  });
+
+  yInc.forEach((/** @type {any} */ i) => {
+    const m = new Date(i.date).getMonth();
+    ingresosMes[m] += i.amount || 0;
+  });
+
+  const totalAnual = totalesMes.reduce((s, v) => s + v, 0);
+  const ingresosAnual = ingresosMes.reduce((s, v) => s + v, 0);
   return {
-    year1, year2, mes1, mes2,
-    ingAnual1, ingAnual2, ingMes1, ingMes2,
-    balAnual1, balAnual2, balMes1, balMes2,
-    catsAnual, catsMes, totGastoAnual1, totGastoAnual2, totGastoMes1, totGastoMes2,
-    mediosAnual, mediosMes,
+    ingresosAnual, ingresosMes,
+    balanceAnual: ingresosAnual - totalAnual,
+    cats: Object.values(catMap).sort((a, b) => b.total - a.total),
+    totalesMes, totalAnual,
+    medios: Object.values(medioMap).sort((a, b) => b.total - a.total),
   };
 };
 
-const fmt = (v) => `$${Math.abs(v).toLocaleString('es-AR')}`;
-const fmtSigned = (v) => v < 0 ? `-$${Math.abs(v).toLocaleString('es-AR')}` : `$${v.toLocaleString('es-AR')}`;
+const computeComparison = (/** @type {any[]} */ expenses, /** @type {any[]} */ incomes, /** @type {(e: any) => boolean} */ filter1, /** @type {(e: any) => boolean} */ filter2, /** @type {string} */ label1, /** @type {string} */ label2) => {
+  const summarize = (/** @type {(e: any) => boolean} */ filterFn) => {
+    const pExp = expenses.filter(e => e.date && filterFn(e));
+    const pInc = incomes.filter(i => i.date && filterFn(i));
+    const catMap = /** @type {Record<string, {categoria: string, val: number}>} */ ({});
+    const medioMap = /** @type {Record<string, {medio: string, val: number}>} */ ({});
+    let totalGasto = 0, totalIngreso = 0;
+    pExp.forEach((/** @type {any} */ e) => {
+      const a = e.amount || 0;
+      totalGasto += a;
+      const cat = e.category || 'Sin Categoría';
+      if (!catMap[cat]) catMap[cat] = { categoria: cat, val: 0 };
+      catMap[cat].val += a;
+      const medio = e.payment_method || 'Otro';
+      if (!medioMap[medio]) medioMap[medio] = { medio, val: 0 };
+      medioMap[medio].val += a;
+    });
+    pInc.forEach((/** @type {any} */ i) => { totalIngreso += i.amount || 0; });
+    return { totalGasto, totalIngreso, cats: Object.values(catMap), medios: Object.values(medioMap) };
+  };
+
+  const s1 = summarize(filter1);
+  const s2 = summarize(filter2);
+
+  const allCats = [...new Set([...s1.cats.map(c => c.categoria), ...s2.cats.map(c => c.categoria)])];
+  const allMedios = [...new Set([...s1.medios.map(m => m.medio), ...s2.medios.map(m => m.medio)])];
+
+  return {
+    label1, label2,
+    totGasto1: s1.totalGasto, totGasto2: s2.totalGasto,
+    bal1: s1.totalIngreso - s1.totalGasto, bal2: s2.totalIngreso - s2.totalGasto,
+    cats: allCats.map(cat => ({
+      categoria: cat,
+      val1: s1.cats.find(c => c.categoria === cat)?.val || 0,
+      val2: s2.cats.find(c => c.categoria === cat)?.val || 0,
+    })).sort((a, b) => (b.val1 + b.val2) - (a.val1 + a.val2)),
+    medios: allMedios.map(medio => ({
+      medio,
+      val1: s1.medios.find(m => m.medio === medio)?.val || 0,
+      val2: s2.medios.find(m => m.medio === medio)?.val || 0,
+    })).sort((a, b) => (b.val1 + b.val2) - (a.val1 + a.val2)),
+  };
+};
 
 const ListPicker = ({ title, selected, onSelect, onClose, items }) => (
   <>
@@ -112,26 +133,25 @@ const ListPicker = ({ title, selected, onSelect, onClose, items }) => (
 );
 
 export default function Economy() {
-  const { isConnected, reconnect, getHojaAnual, getComparacion, setComparacionMeses } = useGoogleSheets();
+  const { isConnected, reconnect, agregarMovimiento, actualizarMovimiento, eliminarMovimiento } = useGoogleSheets();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('mensual');
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [selectedYear, setSelectedYear] = useState(CURRENT_YEAR);
-  const [availableYears, setAvailableYears] = useState([CURRENT_YEAR]);
-  const [anualData, setAnualData] = useState(null);
-  const [compareData, setCompareData] = useState(null);
-  const [loadingData, setLoadingData] = useState(false);
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showAddIncome, setShowAddIncome] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
-  const [compareMes1, setCompareMes1] = useState('Enero');
-  const [compareMes2, setCompareMes2] = useState('Abril');
+  const [compareMode, setCompareMode] = useState('anual');
+  const [compareYear1, setCompareYear1] = useState(CURRENT_YEAR);
+  const [compareYear2, setCompareYear2] = useState(CURRENT_YEAR - 1);
+  const [comparePeriod1, setComparePeriod1] = useState(subMonths(new Date(), 1));
+  const [comparePeriod2, setComparePeriod2] = useState(subMonths(new Date(), 2));
   const [showCmp1Picker, setShowCmp1Picker] = useState(false);
   const [showCmp2Picker, setShowCmp2Picker] = useState(false);
-  const [updatingMeses, setUpdatingMeses] = useState(false);
-  const [compareMode, setCompareMode] = useState('anual');
+  const [editingItem, setEditingItem] = useState(/** @type {null|{tipo:'Gasto'|'Ingreso', data: any}} */ (null));
+  const [deletingId, setDeletingId] = useState(/** @type {string|null} */ (null));
 
   useRealtimeQuery('expenses', 'expenses');
   useRealtimeQuery('income', 'incomes');
@@ -146,57 +166,17 @@ export default function Economy() {
     queryFn: () => api.entities.Income.list('-date'),
   });
 
-  useEffect(() => {
-    if (isConnected) loadAvailableYears();
-  }, [isConnected]);
-
-  useEffect(() => { if (isConnected && activeTab === 'anual') loadAnual(); }, [isConnected, activeTab, selectedYear]);
-  useEffect(() => { if (isConnected && activeTab === 'comparar') loadComparar(); }, [isConnected, activeTab]);
-
-  const loadAvailableYears = async () => {
-    try {
-      const token = localStorage.getItem('google_access_token');
-      const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/1ydoIpAzJrPUQ-wiYHiqRLSzF5wltilDrloY_iu34Nj8?fields=sheets.properties.title`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      const years = (data.sheets || [])
-        .map(s => s.properties.title)
-        .filter(t => t.startsWith('Año '))
-        .map(t => parseInt(t.replace('Año ', '')))
-        .filter(y => !isNaN(y))
-        .sort((a, b) => b - a);
-      if (years.length > 0) setAvailableYears(years);
-    } catch (e) { console.error(e); }
-  };
-
-  const loadAnual = async () => {
-    setLoadingData(true);
-    try { setAnualData(parseAnual(await getHojaAnual(selectedYear))); }
-    catch (e) { console.error(e); }
-    finally { setLoadingData(false); }
-  };
-
-  const loadComparar = async () => {
-    setLoadingData(true);
-    try { setCompareData(parseComparacion(await getComparacion())); }
-    catch (e) { console.error(e); }
-    finally { setLoadingData(false); }
-  };
-
-  const handleUpdateMeses = async (m1, m2) => {
-    setUpdatingMeses(true);
-    try {
-      const rows = await setComparacionMeses(m1, m2);
-      setCompareData(parseComparacion(rows));
-    } catch (e) { console.error(e); }
-    finally { setUpdatingMeses(false); }
-  };
+  const availableYears = useMemo(() => {
+    const years = new Set([CURRENT_YEAR, CURRENT_YEAR - 1]);
+    [...expenses, ...incomes].forEach(item => {
+      if (item.date) years.add(new Date(item.date).getFullYear());
+    });
+    return [...years].sort((a, b) => b - a);
+  }, [expenses, incomes]);
 
   const availableMonths = useMemo(() => {
     const seen = new Set();
     const months = [];
-
     [...expenses, ...incomes].forEach(item => {
       const d = item.date ? parseISO(item.date) : null;
       if (d) {
@@ -204,16 +184,41 @@ export default function Economy() {
         if (!seen.has(key)) { seen.add(key); months.push(new Date(d.getFullYear(), d.getMonth(), 1)); }
       }
     });
-
     for (let i = 0; i < 12; i++) {
       const d = subMonths(new Date(), i);
       const key = format(d, 'yyyy-MM');
       if (!seen.has(key)) { seen.add(key); months.push(new Date(d.getFullYear(), d.getMonth(), 1)); }
     }
-
     months.sort((a, b) => b.getTime() - a.getTime());
     return months;
   }, [expenses, incomes]);
+
+  const anualData = useMemo(
+    () => computeAnualData(expenses, incomes, selectedYear),
+    [expenses, incomes, selectedYear]
+  );
+
+  const compareData = useMemo(() => {
+    if (compareMode === 'anual') {
+      return computeComparison(
+        expenses, incomes,
+        e => new Date(e.date).getFullYear() === compareYear1,
+        e => new Date(e.date).getFullYear() === compareYear2,
+        String(compareYear1), String(compareYear2)
+      );
+    }
+    const inInterval = (date, period) => {
+      try { return isWithinInterval(parseISO(date), { start: startOfMonth(period), end: endOfMonth(period) }); }
+      catch { return false; }
+    };
+    return computeComparison(
+      expenses, incomes,
+      e => inInterval(e.date, comparePeriod1),
+      e => inInterval(e.date, comparePeriod2),
+      format(comparePeriod1, 'MMM yyyy', { locale: es }),
+      format(comparePeriod2, 'MMM yyyy', { locale: es })
+    );
+  }, [expenses, incomes, compareMode, compareYear1, compareYear2, comparePeriod1, comparePeriod2]);
 
   const periodExpenses = expenses.filter(e => {
     const d = e.date ? parseISO(e.date) : null;
@@ -241,6 +246,98 @@ export default function Economy() {
   const totalGastos = periodExpenses.reduce((s, e) => s + (e.amount || 0), 0);
   const totalIngresos = periodIncomes.reduce((s, i) => s + (i.amount || 0), 0);
   const balance = totalIngresos - totalGastos;
+
+  const handleExpenseSaved = async (/** @type {any} */ expense) => {
+    if (!isConnected) return;
+    try {
+      await agregarMovimiento({
+        fecha: format(parseISO(expense.date), 'dd/MM/yyyy'),
+        tipo: 'Gasto',
+        categoria: expense.category || '-',
+        monto: expense.amount,
+        medio: expense.payment_method || '-',
+        cuota: '-',
+        moneda: 'Pesos',
+        descripcion: expense.description || '-',
+        supabaseId: expense.id || '',
+      });
+    } catch (e) { console.error('Error al guardar en Sheets:', e); }
+  };
+
+  const handleIncomeSaved = async (/** @type {any} */ income) => {
+    if (!isConnected) return;
+    try {
+      await agregarMovimiento({
+        fecha: format(parseISO(income.date), 'dd/MM/yyyy'),
+        tipo: 'Ingreso',
+        categoria: income.category || '-',
+        monto: income.amount,
+        medio: '-',
+        cuota: '-',
+        moneda: 'Pesos',
+        descripcion: income.description || '-',
+        supabaseId: income.id || '',
+      });
+    } catch (e) { console.error('Error al guardar en Sheets:', e); }
+  };
+
+  const deleteExpenseMutation = useMutation({
+    mutationFn: (/** @type {string} */ id) => api.entities.Expense.delete(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['expenses'] }),
+  });
+
+  const deleteIncomeMutation = useMutation({
+    mutationFn: (/** @type {string} */ id) => api.entities.Income.delete(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['incomes'] }),
+  });
+
+  const handleDeleteItem = async (/** @type {any} */ m) => {
+    if (m.tipo === 'Gasto') deleteExpenseMutation.mutate(m.id);
+    else deleteIncomeMutation.mutate(m.id);
+    setDeletingId(null);
+    if (isConnected) {
+      try { await eliminarMovimiento(m.id); } catch (e) { console.error('Error al eliminar en Sheets:', e); }
+    }
+  };
+
+  const handleEditItem = (/** @type {any} */ m) => {
+    const original = m.tipo === 'Gasto'
+      ? expenses.find(e => e.id === m.id)
+      : incomes.find(i => i.id === m.id);
+    if (original) setEditingItem({ tipo: m.tipo, data: original });
+  };
+
+  const handleExpenseEdited = async (/** @type {any} */ expense) => {
+    if (!isConnected) return;
+    try {
+      await actualizarMovimiento(expense.id, {
+        fecha: format(parseISO(expense.date), 'dd/MM/yyyy'),
+        tipo: 'Gasto',
+        categoria: expense.category || '-',
+        monto: expense.amount,
+        medio: expense.payment_method || '-',
+        cuota: '-',
+        moneda: 'Pesos',
+        descripcion: expense.description || '-',
+      });
+    } catch (e) { console.error('Error al actualizar en Sheets:', e); }
+  };
+
+  const handleIncomeEdited = async (/** @type {any} */ income) => {
+    if (!isConnected) return;
+    try {
+      await actualizarMovimiento(income.id, {
+        fecha: format(parseISO(income.date), 'dd/MM/yyyy'),
+        tipo: 'Ingreso',
+        categoria: income.category || '-',
+        monto: income.amount,
+        medio: '-',
+        cuota: '-',
+        moneda: 'Pesos',
+        descripcion: income.description || '-',
+      });
+    } catch (e) { console.error('Error al actualizar en Sheets:', e); }
+  };
 
   const SummaryCards = ({ gastos, ingresos, bal }) => (
     <div className="grid grid-cols-3 gap-2 mb-4">
@@ -276,18 +373,12 @@ export default function Economy() {
       <PageHeader title="Economía" subtitle="Gastos e ingresos" />
 
       {/* Fila de acciones */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-4">
         {isConnected ? (
-          <>
-            <a href={SHEETS_URL} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-sm font-medium border border-emerald-100">
-              <ExternalLink className="w-4 h-4" /> Abrir Sheets
-            </a>
-            <button onClick={() => { if (activeTab === 'anual') loadAnual(); if (activeTab === 'comparar') loadComparar(); }}
-              className="flex items-center gap-2 px-3 py-2 bg-stone-50 text-stone-600 rounded-xl text-sm border border-stone-100">
-              <RefreshCw className="w-4 h-4" /> Actualizar
-            </button>
-          </>
+          <a href={SHEETS_URL} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-sm font-medium border border-emerald-100">
+            <ExternalLink className="w-4 h-4" /> Abrir Sheets
+          </a>
         ) : (
           <button onClick={reconnect}
             className="flex items-center gap-2 px-3 py-2 bg-stone-50 text-stone-600 rounded-xl text-sm border border-stone-100">
@@ -297,7 +388,7 @@ export default function Economy() {
               <path fill="currentColor" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18z"/>
               <path fill="currentColor" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/>
             </svg>
-            Conectar Google (gráficos)
+            Conectar Google (backup Sheets)
           </button>
         )}
       </div>
@@ -332,48 +423,32 @@ export default function Economy() {
             </button>
           </>
         )}
-        {activeTab === 'comparar' && compareData && (
+        {activeTab === 'comparar' && (
           <div className="flex items-center gap-2 w-full">
-            {compareMode === 'anual' ? (
-              <>
-                <div className="flex-1 text-center">
-                  <p className="text-xs text-stone-400 mb-1">Año 1</p>
-                  <div className="px-3 py-2 rounded-xl border border-stone-200 bg-white text-sm font-medium text-stone-900">{compareData.year1}</div>
-                </div>
-                <span className="text-stone-400 text-xs">vs</span>
-                <div className="flex-1 text-center">
-                  <p className="text-xs text-stone-400 mb-1">Año 2</p>
-                  <div className="px-3 py-2 rounded-xl border border-stone-200 bg-white text-sm font-medium text-stone-900">{compareData.year2}</div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex-1">
-                  <p className="text-xs text-stone-400 mb-1">Mes 1</p>
-                  <button onClick={() => setShowCmp1Picker(true)}
-                    className="w-full py-2 rounded-xl border border-stone-200 bg-white text-center text-sm font-medium text-stone-900 hover:bg-stone-50">
-                    {compareData.mes1 || compareMes1}
-                  </button>
-                </div>
-                <span className="text-stone-400 text-xs mt-4">vs</span>
-                <div className="flex-1">
-                  <p className="text-xs text-stone-400 mb-1">Mes 2</p>
-                  <button onClick={() => setShowCmp2Picker(true)}
-                    className="w-full py-2 rounded-xl border border-stone-200 bg-white text-center text-sm font-medium text-stone-900 hover:bg-stone-50">
-                    {compareData.mes2 || compareMes2}
-                  </button>
-                </div>
-              </>
-            )}
+            <div className="flex-1">
+              <p className="text-xs text-stone-400 mb-1">{compareMode === 'anual' ? 'Año 1' : 'Mes 1'}</p>
+              <button onClick={() => setShowCmp1Picker(true)}
+                className="w-full py-2 rounded-xl border border-stone-200 bg-white text-center text-sm font-medium text-stone-900 hover:bg-stone-50">
+                {compareMode === 'anual' ? compareYear1 : format(comparePeriod1, 'MMM yyyy', { locale: es })}
+              </button>
+            </div>
+            <span className="text-stone-400 text-xs mt-4">vs</span>
+            <div className="flex-1">
+              <p className="text-xs text-stone-400 mb-1">{compareMode === 'anual' ? 'Año 2' : 'Mes 2'}</p>
+              <button onClick={() => setShowCmp2Picker(true)}
+                className="w-full py-2 rounded-xl border border-stone-200 bg-white text-center text-sm font-medium text-stone-900 hover:bg-stone-50">
+                {compareMode === 'anual' ? compareYear2 : format(comparePeriod2, 'MMM yyyy', { locale: es })}
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Cards */}
+      {/* Summary cards */}
       {activeTab === 'mensual' && (
         <SummaryCards gastos={totalGastos} ingresos={totalIngresos} bal={balance} />
       )}
-      {activeTab === 'anual' && anualData && (
+      {activeTab === 'anual' && (
         <SummaryCards gastos={anualData.totalAnual} ingresos={anualData.ingresosAnual} bal={anualData.balanceAnual} />
       )}
 
@@ -394,21 +469,31 @@ export default function Economy() {
               <div className="space-y-2">
                 {periodMovimientos.map((m, i) => (
                   <div key={m.id || i} className="bg-white rounded-2xl p-4 border border-stone-100 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${m.tipo === 'Ingreso' ? 'bg-emerald-100' : 'bg-stone-100'}`}>
-                          {m.tipo === 'Ingreso' ? <TrendingUp className="w-4 h-4 text-emerald-600" /> : <TrendingDown className="w-4 h-4 text-stone-600" />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium text-stone-900 text-sm truncate">{m.descripcion || m.categoria || m.tipo}</p>
-                          <p className="text-xs text-stone-400 truncate">
-                            {m.fecha}{m.categoria && ` • ${m.categoria}`}{m.medio && ` • ${m.medio}`}
-                          </p>
-                        </div>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${m.tipo === 'Ingreso' ? 'bg-emerald-100' : 'bg-stone-100'}`}>
+                        {m.tipo === 'Ingreso' ? <TrendingUp className="w-4 h-4 text-emerald-600" /> : <TrendingDown className="w-4 h-4 text-stone-600" />}
                       </div>
-                      <span className={`font-bold text-sm flex-shrink-0 ml-2 ${m.tipo === 'Ingreso' ? 'text-emerald-600' : 'text-red-600'}`}>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-stone-900 text-sm truncate">{m.descripcion || m.categoria || m.tipo}</p>
+                        <p className="text-xs text-stone-400 truncate">
+                          {m.fecha}{m.categoria && ` • ${m.categoria}`}{m.medio && ` • ${m.medio}`}
+                        </p>
+                      </div>
+                      <span className={`font-bold text-sm flex-shrink-0 ${m.tipo === 'Ingreso' ? 'text-emerald-600' : 'text-red-600'}`}>
                         {m.tipo === 'Ingreso' ? '+' : '-'}${Math.abs(m.monto).toLocaleString('es-AR')}
                       </span>
+                      <button onClick={() => handleEditItem(m)} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 flex-shrink-0">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      {deletingId === m.id ? (
+                        <button onClick={() => handleDeleteItem(m)} className="p-1.5 rounded-lg bg-red-100 text-red-600 flex-shrink-0 text-xs font-bold">
+                          ✓
+                        </button>
+                      ) : (
+                        <button onClick={() => setDeletingId(m.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-stone-400 flex-shrink-0">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -419,16 +504,13 @@ export default function Economy() {
 
         {activeTab === 'anual' && (
           <motion.div key="anual" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-            {!isConnected ? (
+            {(loadingExpenses || loadingIncomes) ? (
+              <div className="flex items-center justify-center py-16"><Loader2 className="w-8 h-8 text-stone-400 animate-spin" /></div>
+            ) : anualData.totalAnual === 0 && anualData.ingresosAnual === 0 ? (
               <div className="text-center py-12 text-stone-400">
                 <BarChart3 className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                <p className="text-sm mb-3">Conectá con Google para ver los gráficos anuales</p>
-                <button onClick={reconnect} className="px-4 py-2 bg-stone-900 text-white rounded-xl text-sm">Conectar</button>
+                <p className="text-sm">Sin datos para {selectedYear}</p>
               </div>
-            ) : loadingData ? (
-              <div className="flex items-center justify-center py-16"><Loader2 className="w-8 h-8 text-stone-400 animate-spin" /></div>
-            ) : !anualData ? (
-              <div className="text-center py-12 text-stone-400"><BarChart3 className="w-10 h-10 mx-auto mb-3 opacity-40" /><p className="text-sm">Sin datos para {selectedYear}</p></div>
             ) : (
               <>
                 <div className="bg-white rounded-2xl p-4 border border-stone-100">
@@ -450,26 +532,28 @@ export default function Economy() {
                   </ResponsiveContainer>
                 </div>
 
-                <div className="bg-white rounded-2xl p-4 border border-stone-100">
-                  <h3 className="font-semibold text-stone-900 mb-4 text-sm">Gastos por categoría</h3>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={[...anualData.cats].sort((a, b) => b.total - a.total).map(c => ({ name: c.categoria, total: c.total }))} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={85} />
-                      <Tooltip formatter={v => [fmt(v), 'Total']} />
-                      <Bar dataKey="total" radius={[0, 4, 4, 0]}>
-                        {anualData.cats.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                {anualData.cats.length > 0 && (
+                  <div className="bg-white rounded-2xl p-4 border border-stone-100">
+                    <h3 className="font-semibold text-stone-900 mb-4 text-sm">Gastos por categoría</h3>
+                    <ResponsiveContainer width="100%" height={Math.max(180, anualData.cats.length * 32)}>
+                      <BarChart data={anualData.cats.map(c => ({ name: c.categoria, total: c.total }))} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={85} />
+                        <Tooltip formatter={v => [fmt(v), 'Total']} />
+                        <Bar dataKey="total" radius={[0, 4, 4, 0]}>
+                          {anualData.cats.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
 
                 {anualData.medios.filter(m => m.total > 0).length > 0 && (
                   <div className="bg-white rounded-2xl p-4 border border-stone-100">
                     <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por medio de pago</h3>
-                    <ResponsiveContainer width="100%" height={180}>
-                      <BarChart data={[...anualData.medios].filter(m => m.total > 0).sort((a, b) => b.total - a.total).map(m => ({ name: m.medio, total: m.total }))} layout="vertical">
+                    <ResponsiveContainer width="100%" height={Math.max(120, anualData.medios.filter(m => m.total > 0).length * 36)}>
+                      <BarChart data={anualData.medios.filter(m => m.total > 0).map(m => ({ name: m.medio, total: m.total }))} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
                         <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={100} />
@@ -482,22 +566,24 @@ export default function Economy() {
                   </div>
                 )}
 
-                <div className="bg-white rounded-2xl p-4 border border-stone-100">
-                  <h3 className="font-semibold text-stone-900 mb-4 text-sm">Evolución por categoría</h3>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={MESES_CORTOS.map((mes, i) => {
-                      const obj = { mes };
-                      anualData.cats.forEach(c => { if (c.meses[i] > 0) obj[c.categoria] = c.meses[i]; });
-                      return obj;
-                    })}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip formatter={v => [fmt(v), '']} />
-                      {anualData.cats.map((c, i) => <Bar key={c.categoria} dataKey={c.categoria} stackId="a" fill={COLORS[i % COLORS.length]} />)}
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                {anualData.cats.length > 0 && (
+                  <div className="bg-white rounded-2xl p-4 border border-stone-100">
+                    <h3 className="font-semibold text-stone-900 mb-4 text-sm">Evolución por categoría</h3>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={MESES_CORTOS.map((mes, i) => {
+                        const obj = /** @type {Record<string, any>} */ ({ mes });
+                        anualData.cats.forEach(c => { if (c.meses[i] > 0) obj[c.categoria] = c.meses[i]; });
+                        return obj;
+                      })}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                        <Tooltip formatter={v => [fmt(v), '']} />
+                        {anualData.cats.map((c, i) => <Bar key={c.categoria} dataKey={c.categoria} stackId="a" fill={COLORS[i % COLORS.length]} />)}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </>
             )}
           </motion.div>
@@ -505,127 +591,66 @@ export default function Economy() {
 
         {activeTab === 'comparar' && (
           <motion.div key="comparar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-            {!isConnected ? (
-              <div className="text-center py-12 text-stone-400">
-                <ArrowUpDown className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                <p className="text-sm mb-3">Conectá con Google para comparar períodos</p>
-                <button onClick={reconnect} className="px-4 py-2 bg-stone-900 text-white rounded-xl text-sm">Conectar</button>
-              </div>
+            <div className="flex gap-1 p-1 bg-stone-100 rounded-xl">
+              <button onClick={() => setCompareMode('anual')}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${compareMode === 'anual' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>
+                Por año
+              </button>
+              <button onClick={() => setCompareMode('meses')}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${compareMode === 'meses' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>
+                Por mes
+              </button>
+            </div>
+
+            {(loadingExpenses || loadingIncomes) ? (
+              <div className="flex items-center justify-center py-16"><Loader2 className="w-8 h-8 text-stone-400 animate-spin" /></div>
             ) : (
               <>
-                <div className="flex gap-1 p-1 bg-stone-100 rounded-xl">
-                  <button onClick={() => setCompareMode('anual')}
-                    className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${compareMode === 'anual' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>
-                    Por año
-                  </button>
-                  <button onClick={() => setCompareMode('meses')}
-                    className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${compareMode === 'meses' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}>
-                    Por mes
-                  </button>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 text-center">
+                    <p className="text-xs text-indigo-500 mb-1">{compareData.label1}</p>
+                    <p className="text-lg font-bold text-indigo-700">-{fmt(compareData.totGasto1)}</p>
+                    <p className="text-xs text-indigo-400 mt-1">{fmtSigned(compareData.bal1)} balance</p>
+                  </div>
+                  <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 text-center">
+                    <p className="text-xs text-amber-500 mb-1">{compareData.label2}</p>
+                    <p className="text-lg font-bold text-amber-700">-{fmt(compareData.totGasto2)}</p>
+                    <p className="text-xs text-amber-400 mt-1">{fmtSigned(compareData.bal2)} balance</p>
+                  </div>
                 </div>
 
-                {loadingData ? (
-                  <div className="flex items-center justify-center py-16"><Loader2 className="w-8 h-8 text-stone-400 animate-spin" /></div>
-                ) : (
-                  <>
-                    {compareMode === 'anual' && compareData && (
-                      <>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 text-center">
-                            <p className="text-xs text-indigo-500 mb-1">{compareData.year1}</p>
-                            <p className="text-lg font-bold text-indigo-700">-{fmt(compareData.totGastoAnual1)}</p>
-                          </div>
-                          <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 text-center">
-                            <p className="text-xs text-amber-500 mb-1">{compareData.year2}</p>
-                            <p className="text-lg font-bold text-amber-700">-{fmt(compareData.totGastoAnual2)}</p>
-                          </div>
-                        </div>
+                {compareData.cats.length > 0 && (
+                  <div className="bg-white rounded-2xl p-4 border border-stone-100">
+                    <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por categoría</h3>
+                    <ResponsiveContainer width="100%" height={Math.max(180, compareData.cats.length * 32)}>
+                      <BarChart layout="vertical" data={compareData.cats.map(c => ({ name: c.categoria, [compareData.label1]: c.val1, [compareData.label2]: c.val2 }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={85} />
+                        <Tooltip formatter={v => [fmt(v), '']} />
+                        <Legend />
+                        <Bar dataKey={compareData.label1} fill="#6366f1" radius={[0, 4, 4, 0]} />
+                        <Bar dataKey={compareData.label2} fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
 
-                        <div className="bg-white rounded-2xl p-4 border border-stone-100">
-                          <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por categoría</h3>
-                          <ResponsiveContainer width="100%" height={260}>
-                            <BarChart layout="vertical" data={compareData.catsAnual.map(c => ({ name: c.categoria, [compareData.year1]: c.val1, [compareData.year2]: c.val2 }))}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                              <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                              <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={85} />
-                              <Tooltip formatter={v => [fmt(v), '']} />
-                              <Legend />
-                              <Bar dataKey={String(compareData.year1)} fill="#6366f1" radius={[0, 4, 4, 0]} />
-                              <Bar dataKey={String(compareData.year2)} fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-
-                        <div className="bg-white rounded-2xl p-4 border border-stone-100">
-                          <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por medio de pago</h3>
-                          <ResponsiveContainer width="100%" height={200}>
-                            <BarChart layout="vertical" data={compareData.mediosAnual.map(m => ({ name: m.medio, [compareData.year1]: m.val1, [compareData.year2]: m.val2 }))}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                              <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                              <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={100} />
-                              <Tooltip formatter={v => [fmt(v), '']} />
-                              <Legend />
-                              <Bar dataKey={String(compareData.year1)} fill="#6366f1" radius={[0, 4, 4, 0]} />
-                              <Bar dataKey={String(compareData.year2)} fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </>
-                    )}
-
-                    {compareMode === 'meses' && compareData && (
-                      <>
-                        {updatingMeses ? (
-                          <div className="flex items-center justify-center gap-2 py-8 text-stone-400 text-sm">
-                            <Loader2 className="w-4 h-4 animate-spin" /> Actualizando...
-                          </div>
-                        ) : (
-                          <>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 text-center">
-                                <p className="text-xs text-indigo-500 mb-1">{compareData.mes1}</p>
-                                <p className="text-lg font-bold text-indigo-700">-{fmt(compareData.totGastoMes1)}</p>
-                              </div>
-                              <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 text-center">
-                                <p className="text-xs text-amber-500 mb-1">{compareData.mes2}</p>
-                                <p className="text-lg font-bold text-amber-700">-{fmt(compareData.totGastoMes2)}</p>
-                              </div>
-                            </div>
-
-                            <div className="bg-white rounded-2xl p-4 border border-stone-100">
-                              <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por categoría</h3>
-                              <ResponsiveContainer width="100%" height={260}>
-                                <BarChart layout="vertical" data={compareData.catsMes.map(c => ({ name: c.categoria, [compareData.mes1]: c.val1, [compareData.mes2]: c.val2 }))}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                                  <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={85} />
-                                  <Tooltip formatter={v => [fmt(v), '']} />
-                                  <Legend />
-                                  <Bar dataKey={compareData.mes1} fill="#6366f1" radius={[0, 4, 4, 0]} />
-                                  <Bar dataKey={compareData.mes2} fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                                </BarChart>
-                              </ResponsiveContainer>
-                            </div>
-
-                            <div className="bg-white rounded-2xl p-4 border border-stone-100">
-                              <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por medio de pago</h3>
-                              <ResponsiveContainer width="100%" height={200}>
-                                <BarChart layout="vertical" data={compareData.mediosMes.map(m => ({ name: m.medio, [compareData.mes1]: m.val1, [compareData.mes2]: m.val2 }))}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                                  <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={100} />
-                                  <Tooltip formatter={v => [fmt(v), '']} />
-                                  <Legend />
-                                  <Bar dataKey={compareData.mes1} fill="#6366f1" radius={[0, 4, 4, 0]} />
-                                  <Bar dataKey={compareData.mes2} fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                                </BarChart>
-                              </ResponsiveContainer>
-                            </div>
-                          </>
-                        )}
-                      </>
-                    )}
-                  </>
+                {compareData.medios.length > 0 && (
+                  <div className="bg-white rounded-2xl p-4 border border-stone-100">
+                    <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por medio de pago</h3>
+                    <ResponsiveContainer width="100%" height={Math.max(120, compareData.medios.length * 36)}>
+                      <BarChart layout="vertical" data={compareData.medios.map(m => ({ name: m.medio, [compareData.label1]: m.val1, [compareData.label2]: m.val2 }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={100} />
+                        <Tooltip formatter={v => [fmt(v), '']} />
+                        <Legend />
+                        <Bar dataKey={compareData.label1} fill="#6366f1" radius={[0, 4, 4, 0]} />
+                        <Bar dataKey={compareData.label2} fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 )}
               </>
             )}
@@ -689,17 +714,35 @@ export default function Economy() {
         {showYearPicker && (
           <ListPicker title="Elegir año" selected={String(selectedYear)}
             items={availableYears.map(String)}
-            onSelect={(y) => { setSelectedYear(parseInt(y)); }}
+            onSelect={(y) => setSelectedYear(parseInt(y))}
             onClose={() => setShowYearPicker(false)} />
         )}
         {showCmp1Picker && (
-          <ListPicker title="Mes 1" selected={compareMes1} items={MESES_LARGOS}
-            onSelect={(m) => { setCompareMes1(m); handleUpdateMeses(m, compareMes2); }}
+          <ListPicker
+            title={compareMode === 'anual' ? 'Año 1' : 'Mes 1'}
+            selected={compareMode === 'anual' ? String(compareYear1) : format(comparePeriod1, 'MMMM yyyy', { locale: es })}
+            items={compareMode === 'anual' ? availableYears.map(String) : availableMonths.map(d => format(d, 'MMMM yyyy', { locale: es }))}
+            onSelect={(val) => {
+              if (compareMode === 'anual') { setCompareYear1(parseInt(val)); }
+              else {
+                const found = availableMonths.find(d => format(d, 'MMMM yyyy', { locale: es }) === val);
+                if (found) setComparePeriod1(found);
+              }
+            }}
             onClose={() => setShowCmp1Picker(false)} />
         )}
         {showCmp2Picker && (
-          <ListPicker title="Mes 2" selected={compareMes2} items={MESES_LARGOS}
-            onSelect={(m) => { setCompareMes2(m); handleUpdateMeses(compareMes1, m); }}
+          <ListPicker
+            title={compareMode === 'anual' ? 'Año 2' : 'Mes 2'}
+            selected={compareMode === 'anual' ? String(compareYear2) : format(comparePeriod2, 'MMMM yyyy', { locale: es })}
+            items={compareMode === 'anual' ? availableYears.map(String) : availableMonths.map(d => format(d, 'MMMM yyyy', { locale: es }))}
+            onSelect={(val) => {
+              if (compareMode === 'anual') { setCompareYear2(parseInt(val)); }
+              else {
+                const found = availableMonths.find(d => format(d, 'MMMM yyyy', { locale: es }) === val);
+                if (found) setComparePeriod2(found);
+              }
+            }}
             onClose={() => setShowCmp2Picker(false)} />
         )}
       </AnimatePresence>
@@ -707,12 +750,26 @@ export default function Economy() {
       <AddExpenseModal
         isOpen={showAddExpense}
         onClose={() => setShowAddExpense(false)}
-        onSave={() => {}}
+        onSave={handleExpenseSaved}
       />
       <AddIncomeModal
         isOpen={showAddIncome}
         onClose={() => setShowAddIncome(false)}
-        onSave={() => {}}
+        onSave={handleIncomeSaved}
+      />
+      <AddExpenseModal
+        isOpen={!!editingItem && editingItem.tipo === 'Gasto'}
+        onClose={() => setEditingItem(null)}
+        onSave={handleExpenseEdited}
+        initialData={editingItem?.data}
+        editId={editingItem?.data?.id}
+      />
+      <AddIncomeModal
+        isOpen={!!editingItem && editingItem.tipo === 'Ingreso'}
+        onClose={() => setEditingItem(null)}
+        onSave={handleIncomeEdited}
+        initialData={editingItem?.data}
+        editId={editingItem?.data?.id}
       />
     </div>
   );
