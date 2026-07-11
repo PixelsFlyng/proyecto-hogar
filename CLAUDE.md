@@ -193,9 +193,18 @@ Antes de dar por terminado un cambio: `npm run lint && npm run build`.
 
 ## Pendientes
 
-- [ ] **Categorías de gastos desde Sheets** — importar/sincronizar las categorías que ya existen en el Google Sheet para usarlas en `AddExpenseModal` (sección Economía).
-- [ ] **Métodos de pago desde Sheets** — ídem para los medios de pago existentes en el Sheet.
-- [ ] **Gráficos en tab Mensual** — agregar gráficos de categorías (y posiblemente medios de pago) para el período mensual seleccionado, similar a los del tab Anual.
-- [ ] **Tooltip de evolución por categoría** — en el gráfico "Evolución por categoría" (tab Anual, `Economy.jsx`), el tooltip solo muestra el monto; agregar el nombre de la categoría también.
-- [ ] **Posición del selector Mensual/Anual/Comparar** — ajustar layout en el tab Comparar donde el selector de período y las tabs quedan mal posicionadas.
-- [ ] **Nuevos gráficos** — evaluar qué otros gráficos aportan valor: tendencia de balance mes a mes, top 5 categorías del mes, comparación ingreso vs gasto acumulado, etc.
+- [x] **Categorías de gastos desde Sheets** — al conectar Google, se importan automáticamente a Supabase las categorías usadas en Movimientos. Al crear una categoría nueva en la app se inserta en la hoja del año actual (antes de "Otros").
+- [x] **Métodos de pago desde Sheets** — ídem para los medios de pago: se sincronizan automáticamente de Movimientos a Supabase al conectar.
+- [x] **Gráficos en tab Mensual** — gráficos de categorías y medios de pago agregados al tab Mensual, encima del listado de movimientos.
+- [x] **Tooltip de evolución por categoría** — tooltip muestra nombre de categoría + monto.
+- [x] **Posición del selector Mensual/Anual/Comparar** — el toggle "Por año/Por mes" se movió al área del selector de período (arriba de las tabs), eliminado del contenido.
+- [x] **Nuevos gráficos** — implementados: torta mensual, gastos por día, gasto acumulado del mes, balance mes a mes, balance acumulado (área), torta anual. Todos configurables por usuario vía panel de toggles (icono engranaje junto a las tabs). Preferencias guardadas en localStorage.
+- [x] **Desincronización de fechas** — bug de timezone corregido: `computeAnualData` y filtros de comparar usaban `new Date()` (UTC midnight) en vez de `parseISO()` (local midnight), causando que gastos del día 1 de cada mes aparecieran en el mes anterior en el tab Anual. También corregido: PostgREST limitaba queries a 1000 filas por defecto; con 1304 expenses se cortaban los más viejos. Solucionado con `.limit(10000)` en el wrapper.
+- [ ] **Importar historial desde Sheets** — los movimientos de antes de la app (ej: abril 2025) existen solo en Sheets, no en Supabase. Falta una pantalla/función de importación masiva desde Movimientos al Sheets → Supabase.
+- [ ] **Shopping - Unidad predeterminada** — al agregar ítems en una lista, el valor predeterminado debe ser "unidades" en vez de "sin unidad".
+- [ ] **Shopping - Editar ítems** — poder editar los ítems ya agregados a una lista.
+- [ ] **Shopping - Limpiar cantidad inicial** — poder borrar el "1" al agregar un ítem; el campo puede quedar vacío pero no debe poder guardarse sin número.
+- [ ] **Shopping - Completar lista parcial** — opción para completar lista aunque no estén todos los ítems marcados: elimina los comprados, los añade al almacén y deja en la lista los ítems sin marcar.
+- [ ] **Shopping - Sin límite de tamaño** — la lista no debe tener altura máxima fija; evitar scroll interno dentro de la lista.
+- [ ] **Shopping - Colapsar/expandir listas** — poder comprimir y expandir cada lista individualmente.
+- [ ] **Shopping - Botón solapado** — cuando hay muchos ítems, el botón "agregar ítem" queda detrás del botón "agregar lista"; resolver el overlap sin romper el layout.

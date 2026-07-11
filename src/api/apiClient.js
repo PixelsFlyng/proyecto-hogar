@@ -19,27 +19,45 @@ const getOwnerId = async () => {
 const createEntity = (tableName) => ({
   list: async (orderBy) => {
     const ownerId = await getOwnerId();
-    let query = supabase.from(tableName).select('*').eq('user_id', ownerId);
-    if (orderBy) {
-      const descending = orderBy.startsWith('-');
-      const column = descending ? orderBy.slice(1) : orderBy;
-      const mappedColumn = column === 'created_date' ? 'created_at' : column;
-      query = query.order(mappedColumn, { ascending: !descending });
+    const PAGE = 1000;
+    let all = [];
+    let from = 0;
+    // Pagina de a 1000 para superar el tope db-max-rows del servidor
+    while (true) {
+      let q = supabase.from(tableName).select('*').eq('user_id', ownerId);
+      if (orderBy) {
+        const desc = orderBy.startsWith('-');
+        const col = desc ? orderBy.slice(1) : orderBy;
+        q = q.order(col === 'created_date' ? 'created_at' : col, { ascending: !desc });
+      }
+      q = q.range(from, from + PAGE - 1);
+      const { data, error } = await q;
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      all = all.concat(data);
+      if (data.length < PAGE) break;
+      from += PAGE;
     }
-    const { data, error } = await query;
-    if (error) throw error;
-    return data || [];
+    return all;
   },
 
   filter: async (filters) => {
     const ownerId = await getOwnerId();
-    let query = supabase.from(tableName).select('*').eq('user_id', ownerId);
-    Object.entries(filters).forEach(([key, value]) => {
-      query = query.eq(key, value);
-    });
-    const { data, error } = await query;
-    if (error) throw error;
-    return data || [];
+    const PAGE = 1000;
+    let all = [];
+    let from = 0;
+    while (true) {
+      let q = supabase.from(tableName).select('*').eq('user_id', ownerId);
+      Object.entries(filters).forEach(([key, value]) => { q = q.eq(key, value); });
+      q = q.range(from, from + PAGE - 1);
+      const { data, error } = await q;
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      all = all.concat(data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    return all;
   },
 
   create: async (payload) => {

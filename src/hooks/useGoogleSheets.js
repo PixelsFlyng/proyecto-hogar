@@ -224,5 +224,57 @@ export const useGoogleSheets = () => {
     } finally { setLoading(false); }
   };
 
-  return { isConnected, loading, disconnect, reconnect, getMovimientos, getHojaAnual, getComparacion, setComparacionMeses, agregarMovimiento, actualizarMovimiento, eliminarMovimiento, analizarTicket };
+  // Lee categorías únicas de gastos y medios de pago únicos del Sheet en una sola llamada
+  const sincronizarDesdeMovimientos = async () => {
+    const data = await sheetsRequest('/values/Movimientos!B2:E');
+    const rows = data.values || [];
+    const cats = new Set();
+    const medios = new Set();
+    rows.forEach(row => {
+      const tipo = row[0]?.trim();
+      const cat = row[1]?.trim();
+      const medio = row[3]?.trim();
+      if (tipo === 'Gasto') {
+        if (cat && cat !== '-') cats.add(cat);
+        if (medio && medio !== '-') medios.add(medio);
+      }
+    });
+    return { categorias: [...cats], medios: [...medios] };
+  };
+
+  // Inserta una nueva categoría de gasto en la hoja del año actual, justo antes de "Otros"
+  const addExpenseCategoryToSheet = async (categoryName) => {
+    const year = new Date().getFullYear();
+    const token = localStorage.getItem('google_access_token');
+    const metaRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}?fields=sheets.properties`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const meta = await metaRes.json();
+    const yearSheet = (meta.sheets || []).find(s => s.properties.title === `Año ${year}`);
+    if (!yearSheet) return;
+    const sheetId = yearSheet.properties.sheetId;
+
+    // Buscar la fila de "Otros" para insertar antes de ella
+    const colAData = await sheetsRequest(`/values/Año ${year}!A1:A25`);
+    const colARows = colAData.values || [];
+    const otrosIdx = colARows.findIndex(r => r[0]?.toLowerCase() === 'otros');
+    const insertIdx = otrosIdx !== -1 ? otrosIdx : 20;
+
+    // Insertar fila heredando fórmulas de la fila anterior
+    await sheetsRequest(':batchUpdate', {
+      method: 'POST',
+      body: JSON.stringify({
+        requests: [{ insertDimension: { range: { sheetId, dimension: 'ROWS', startIndex: insertIdx, endIndex: insertIdx + 1 }, inheritFromBefore: true } }]
+      })
+    });
+
+    // Sobreescribir columna A con el nombre de la nueva categoría
+    await sheetsRequest(
+      `/values/Año ${year}!A${insertIdx + 1}?valueInputOption=USER_ENTERED`,
+      { method: 'PUT', body: JSON.stringify({ values: [[categoryName]] }) }
+    );
+  };
+
+  return { isConnected, loading, disconnect, reconnect, getMovimientos, getHojaAnual, getComparacion, setComparacionMeses, agregarMovimiento, actualizarMovimiento, eliminarMovimiento, analizarTicket, sincronizarDesdeMovimientos, addExpenseCategoryToSheet };
 };

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
-
+import { useGoogleSheets } from '@/hooks/useGoogleSheets';
 
 import { format, addMonths, parseISO, isBefore } from 'date-fns';
 
@@ -49,6 +49,7 @@ export default function AddExpenseModal({ isOpen, onClose, onSave, initialData =
   const [newPaymentIcon, setNewPaymentIcon] = useState('💳');
 
   const queryClient = useQueryClient();
+  const { isConnected, addExpenseCategoryToSheet } = useGoogleSheets();
 
   const { data: customCategories = [] } = useQuery({
     queryKey: ['custom-categories'],
@@ -63,9 +64,12 @@ export default function AddExpenseModal({ isOpen, onClose, onSave, initialData =
     onSuccess: (newCat) => {
       queryClient.invalidateQueries({ queryKey: ['custom-categories'] });
       if (newCat.type === 'expense') {
-        setFormData({ ...formData, category: newCat.name });
+        setFormData(prev => ({ ...prev, category: newCat.name }));
+        if (isConnected) {
+          addExpenseCategoryToSheet(newCat.name).catch(e => console.error('Error al agregar categoría al Sheet:', e));
+        }
       } else {
-        setFormData({ ...formData, payment_method: newCat.name });
+        setFormData(prev => ({ ...prev, payment_method: newCat.name }));
       }
       setShowNewCategory(false);
       setShowNewPayment(false);
