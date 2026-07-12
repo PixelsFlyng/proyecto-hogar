@@ -89,6 +89,27 @@ const createEntity = (tableName) => ({
   },
 });
 
+// Renombra el label de una categoría en la tabla de registros correspondiente
+const renameCategoryLabel = async (type, oldName, newName) => {
+  const ownerId = await getOwnerId();
+  const targets = {
+    expense:        { table: 'expenses',        field: 'category' },
+    payment_method: { table: 'expenses',        field: 'payment_method' },
+    income:         { table: 'income',          field: 'category' },
+    inventory:      { table: 'inventory_items', field: 'category' },
+    task_assignee:  { table: 'tasks',           field: 'assigned_to' },
+    task_category:  { table: 'tasks',           field: 'category' },
+  };
+  const t = targets[type];
+  if (!t) return;
+  const { error } = await supabase
+    .from(t.table)
+    .update({ [t.field]: newName })
+    .eq('user_id', ownerId)
+    .eq(t.field, oldName);
+  if (error) throw error;
+};
+
 export const api = {
   entities: {
     InventoryItem: createEntity('inventory_items'),
@@ -115,6 +136,7 @@ export const api = {
       window.location.href = '/login';
     },
   },
+  renameCategoryLabel,
   users: {
     inviteUser: async (email) => {
       console.log('Invite not implemented yet for:', email);

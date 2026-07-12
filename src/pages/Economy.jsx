@@ -4,7 +4,7 @@ import { api } from '@/api/apiClient';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Plus, TrendingUp, TrendingDown, Receipt, ChevronLeft,
-  ExternalLink, Loader2, X, BarChart3, ArrowUpDown, Pencil, Trash2, Settings
+  ExternalLink, Loader2, X, BarChart3, ArrowUpDown, Pencil, Trash2, Settings, SlidersHorizontal
 } from 'lucide-react';
 import {
   BarChart, Bar, AreaChart, Area,
@@ -185,6 +185,10 @@ export default function Economy() {
   const [deletingId, setDeletingId] = useState(/** @type {string|null} */ (null));
   const [chartVisibility, setChartVisibility] = useState(loadChartVisibility);
   const [showChartConfig, setShowChartConfig] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterType, setFilterType] = useState('todos');
+  const [filterCats, setFilterCats] = useState(/** @type {Set<string>} */ (new Set()));
+  const [filterMedios, setFilterMedios] = useState(/** @type {Set<string>} */ (new Set()));
 
   useRealtimeQuery('expenses', 'expenses');
   useRealtimeQuery('income', 'incomes');
@@ -364,6 +368,31 @@ export default function Economy() {
       return { mes, balance: acc };
     });
   }, [anualData]);
+
+  const availableCatsInPeriod = useMemo(() => {
+    const cats = new Set();
+    periodMovimientos.forEach(m => { if (m.categoria) cats.add(m.categoria); });
+    return /** @type {string[]} */ ([...cats].sort());
+  }, [periodMovimientos]);
+
+  const availableMediosInPeriod = useMemo(() => {
+    const medios = new Set();
+    periodMovimientos.forEach(m => { if (m.medio) medios.add(m.medio); });
+    return /** @type {string[]} */ ([...medios].sort());
+  }, [periodMovimientos]);
+
+  const filteredMovimientos = useMemo(() => {
+    return periodMovimientos.filter(m => {
+      if (filterType !== 'todos' && m.tipo !== filterType) return false;
+      if (filterCats.size > 0 && !filterCats.has(m.categoria || '')) return false;
+      if (filterMedios.size > 0 && !(m.medio && filterMedios.has(m.medio))) return false;
+      return true;
+    });
+  }, [periodMovimientos, filterType, filterCats, filterMedios]);
+
+  const activeFilterCount = (filterType !== 'todos' ? 1 : 0) + filterCats.size + filterMedios.size;
+
+  const clearFilters = () => { setFilterType('todos'); setFilterCats(new Set()); setFilterMedios(new Set()); };
 
   const isVisible = (/** @type {string} */ id) => chartVisibility[id] !== false;
   const toggleChart = (/** @type {string} */ id) => {
@@ -713,38 +742,123 @@ export default function Economy() {
                     </ResponsiveContainer>
                   </div>
                 )}
-                <div className="space-y-2">
-                  {periodMovimientos.map((m, i) => (
-                    <div key={m.id || i} className="bg-white rounded-2xl p-4 border border-stone-100 shadow-sm">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${m.tipo === 'Ingreso' ? 'bg-emerald-100' : 'bg-stone-100'}`}>
-                          {m.tipo === 'Ingreso' ? <TrendingUp className="w-4 h-4 text-emerald-600" /> : <TrendingDown className="w-4 h-4 text-stone-600" />}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-stone-900 text-sm truncate">{m.descripcion || m.categoria || m.tipo}</p>
-                          <p className="text-xs text-stone-400 truncate">
-                            {m.fecha}{m.categoria && ` • ${m.categoria}`}{m.medio && ` • ${m.medio}`}
-                          </p>
-                        </div>
-                        <span className={`font-bold text-sm flex-shrink-0 ${m.tipo === 'Ingreso' ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {m.tipo === 'Ingreso' ? '+' : '-'}${Math.abs(m.monto).toLocaleString('es-AR')}
-                        </span>
-                        <button onClick={() => handleEditItem(m)} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 flex-shrink-0">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        {deletingId === m.id ? (
-                          <button onClick={() => handleDeleteItem(m)} className="p-1.5 rounded-lg bg-red-100 text-red-600 flex-shrink-0 text-xs font-bold">
-                            ✓
-                          </button>
-                        ) : (
-                          <button onClick={() => setDeletingId(m.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-stone-400 flex-shrink-0">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                {/* Barra de filtros */}
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-stone-500">
+                    {filteredMovimientos.length} movimiento{filteredMovimientos.length !== 1 ? 's' : ''}
+                    {activeFilterCount > 0 && <span className="text-stone-400"> (filtrados)</span>}
+                  </p>
+                  <button
+                    onClick={() => setShowFilters(v => !v)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                      activeFilterCount > 0 ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                    }`}
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                    Filtrar{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+                  </button>
                 </div>
+
+                {showFilters && (
+                  <div className="bg-stone-50 rounded-2xl p-3 space-y-3">
+                    <div className="flex gap-1.5">
+                      {[['todos', 'Todos'], ['Gasto', 'Gastos'], ['Ingreso', 'Ingresos']].map(([val, label]) => (
+                        <button key={val} onClick={() => setFilterType(val)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                            filterType === val ? 'bg-stone-900 text-white' : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-100'
+                          }`}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {availableCatsInPeriod.length > 0 && (
+                      <div>
+                        <p className="text-xs text-stone-400 mb-1.5">Categoría</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {availableCatsInPeriod.map(cat => (
+                            <button key={cat} onClick={() => setFilterCats(prev => {
+                              const next = new Set(prev);
+                              next.has(cat) ? next.delete(cat) : next.add(cat);
+                              return next;
+                            })}
+                              className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
+                                filterCats.has(cat) ? 'bg-stone-900 text-white' : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-100'
+                              }`}>
+                              {cat}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {availableMediosInPeriod.length > 0 && filterType !== 'Ingreso' && (
+                      <div>
+                        <p className="text-xs text-stone-400 mb-1.5">Medio de pago</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {availableMediosInPeriod.map(medio => (
+                            <button key={medio} onClick={() => setFilterMedios(prev => {
+                              const next = new Set(prev);
+                              next.has(medio) ? next.delete(medio) : next.add(medio);
+                              return next;
+                            })}
+                              className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
+                                filterMedios.has(medio) ? 'bg-stone-900 text-white' : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-100'
+                              }`}>
+                              {medio}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {activeFilterCount > 0 && (
+                      <button onClick={clearFilters} className="text-xs text-red-500 hover:text-red-700">
+                        Limpiar filtros
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {filteredMovimientos.length === 0 ? (
+                  <div className="text-center py-8 text-stone-400">
+                    <SlidersHorizontal className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                    <p className="text-sm">Sin resultados para los filtros aplicados</p>
+                    <button onClick={clearFilters} className="text-xs text-stone-500 underline mt-2 block mx-auto">
+                      Limpiar filtros
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredMovimientos.map((m, i) => (
+                      <div key={m.id || i} className="bg-white rounded-2xl p-4 border border-stone-100 shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${m.tipo === 'Ingreso' ? 'bg-emerald-100' : 'bg-stone-100'}`}>
+                            {m.tipo === 'Ingreso' ? <TrendingUp className="w-4 h-4 text-emerald-600" /> : <TrendingDown className="w-4 h-4 text-stone-600" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-stone-900 text-sm truncate">{m.descripcion || m.categoria || m.tipo}</p>
+                            <p className="text-xs text-stone-400 truncate">
+                              {m.fecha}{m.categoria && ` • ${m.categoria}`}{m.medio && ` • ${m.medio}`}
+                            </p>
+                          </div>
+                          <span className={`font-bold text-sm flex-shrink-0 ${m.tipo === 'Ingreso' ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {m.tipo === 'Ingreso' ? '+' : '-'}${Math.abs(m.monto).toLocaleString('es-AR')}
+                          </span>
+                          <button onClick={() => handleEditItem(m)} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 flex-shrink-0">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          {deletingId === m.id ? (
+                            <button onClick={() => handleDeleteItem(m)} className="p-1.5 rounded-lg bg-red-100 text-red-600 flex-shrink-0 text-xs font-bold">
+                              ✓
+                            </button>
+                          ) : (
+                            <button onClick={() => setDeletingId(m.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-stone-400 flex-shrink-0">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </motion.div>

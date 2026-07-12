@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useGoogleSheets } from '@/hooks/useGoogleSheets';
+import CategoryChips from '@/components/common/CategoryChips';
 
 import { format, addMonths, parseISO, isBefore } from 'date-fns';
 
@@ -41,47 +42,8 @@ export default function AddExpenseModal({ isOpen, onClose, onSave, initialData =
     }
     return () => { document.body.style.overflow = ''; };
   }, [isOpen]);
-  const [showNewCategory, setShowNewCategory] = useState(false);
-  const [showNewPayment, setShowNewPayment] = useState(false);
-  const [newCatName, setNewCatName] = useState('');
-  const [newCatIcon, setNewCatIcon] = useState('📦');
-  const [newPaymentName, setNewPaymentName] = useState('');
-  const [newPaymentIcon, setNewPaymentIcon] = useState('💳');
-
   const queryClient = useQueryClient();
   const { isConnected, addExpenseCategoryToSheet } = useGoogleSheets();
-
-  const { data: customCategories = [] } = useQuery({
-    queryKey: ['custom-categories'],
-    queryFn: () => api.entities.CustomCategory.list()
-  });
-
-  const expenseCategories = customCategories.filter((c) => c.type === 'expense');
-  const paymentMethods = customCategories.filter((c) => c.type === 'payment_method');
-
-  const createCategoryMutation = useMutation({
-    mutationFn: (data) => api.entities.CustomCategory.create(data),
-    onSuccess: (newCat) => {
-      queryClient.invalidateQueries({ queryKey: ['custom-categories'] });
-      if (newCat.type === 'expense') {
-        setFormData(prev => ({ ...prev, category: newCat.name }));
-        if (isConnected) {
-          addExpenseCategoryToSheet(newCat.name).catch(e => console.error('Error al agregar categoría al Sheet:', e));
-        }
-      } else {
-        setFormData(prev => ({ ...prev, payment_method: newCat.name }));
-      }
-      setShowNewCategory(false);
-      setShowNewPayment(false);
-      setNewCatName('');
-      setNewPaymentName('');
-    }
-  });
-
-  const deleteCategoryMutation = useMutation({
-    mutationFn: (id) => api.entities.CustomCategory.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['custom-categories'] })
-  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -185,87 +147,20 @@ export default function AddExpenseModal({ isOpen, onClose, onSave, initialData =
                 {/* Category Selection */}
                 <div className="space-y-2">
                   <Label>Categoría *</Label>
-                  {expenseCategories.length === 0 && !showNewCategory ?
-                <div className="bg-stone-50 rounded-xl p-4 text-center">
-                      <p className="text-sm text-stone-500 mb-3">Todavía no tenés categorías</p>
-                      <Button type="button" variant="outline" onClick={() => setShowNewCategory(true)} className="rounded-xl">
-                        <Plus className="w-4 h-4 mr-2" /> Crear categoría
-                      </Button>
-                    </div> :
-
-                <>
-                      <div className="flex flex-wrap gap-2">
-                        {expenseCategories.map((cat) =>
-                    <div key={cat.id} className="relative group">
-                            <button
-                        type="button"
-                        onClick={() => setFormData({ ...formData, category: cat.name })}
-                        className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition-all ${
-                        formData.category === cat.name ?
-                        'bg-stone-900 text-white' :
-                        'bg-stone-100 text-stone-700 hover:bg-stone-200'}`
-                        }>
-
-                              <span>{cat.icon}</span>
-                              <span>{cat.name}</span>
-                            </button>
-                            <button
-                        type="button"
-                        onClick={(e) => {e.stopPropagation();deleteCategoryMutation.mutate(cat.id);}}
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                    )}
-                        <button
-                      type="button"
-                      onClick={() => setShowNewCategory(true)}
-                      className="px-3 py-2 rounded-xl text-sm border-2 border-dashed border-stone-300 text-stone-500 hover:border-stone-400">
-
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </>
-                }
-
-                  {showNewCategory &&
-                <div className="bg-stone-50 rounded-xl p-4 space-y-3">
-                      <Input
+                  <CategoryChips
+                    categoryType="expense"
+                    selected={formData.category}
+                    onSelect={(name) => setFormData(d => ({ ...d, category: name }))}
+                    emojiOptions={EMOJI_OPTIONS}
                     placeholder="Nombre de categoría"
-                    value={newCatName}
-                    onChange={(e) => setNewCatName(e.target.value)}
-                    className="rounded-xl" />
-
-                      <div className="flex flex-wrap gap-1">
-                        {EMOJI_OPTIONS.map((emoji) =>
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => setNewCatIcon(emoji)}
-                      className={`p-2 rounded-lg text-lg ${
-                      newCatIcon === emoji ? 'bg-stone-200 ring-2 ring-stone-400' : 'hover:bg-stone-200'}`
-                      }>
-
-                            {emoji}
-                          </button>
-                    )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button type="button" variant="outline" onClick={() => setShowNewCategory(false)} className="flex-1 rounded-xl">
-                          Cancelar
-                        </Button>
-                        <Button
-                      type="button"
-                      onClick={() => createCategoryMutation.mutate({ name: newCatName, type: 'expense', icon: newCatIcon })}
-                      disabled={!newCatName.trim()}
-                      className="flex-1 rounded-xl bg-stone-900">
-
-                          Crear
-                        </Button>
-                      </div>
-                    </div>
-                }
+                    cascadeQueryKeys={[['expenses']]}
+                    emptyMessage="Todavía no tenés categorías"
+                    emptyButtonLabel="Crear categoría"
+                    onAfterCreate={(cat) => {
+                      setFormData(d => ({ ...d, category: cat.name }));
+                      if (isConnected) addExpenseCategoryToSheet(cat.name).catch(e => console.error(e));
+                    }}
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -283,76 +178,15 @@ export default function AddExpenseModal({ isOpen, onClose, onSave, initialData =
                 {/* Payment Method */}
                 <div className="space-y-2">
                   <Label>Método de pago</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {paymentMethods.map((pm) =>
-                  <div key={pm.id} className="relative group">
-                        <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, payment_method: pm.name })}
-                      className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition-all ${
-                      formData.payment_method === pm.name ?
-                      'bg-stone-900 text-white' :
-                      'bg-stone-100 text-stone-700 hover:bg-stone-200'}`
-                      }>
-
-                          <span>{pm.icon}</span>
-                          <span>{pm.name}</span>
-                        </button>
-                        <button
-                      type="button"
-                      onClick={(e) => {e.stopPropagation();deleteCategoryMutation.mutate(pm.id);}}
-                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                  )}
-                    <button
-                    type="button"
-                    onClick={() => setShowNewPayment(true)}
-                    className="px-3 py-2 rounded-xl text-sm border-2 border-dashed border-stone-300 text-stone-500 hover:border-stone-400">
-
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {showNewPayment &&
-                <div className="bg-stone-50 rounded-xl p-4 space-y-3">
-                      <Input
+                  <CategoryChips
+                    categoryType="payment_method"
+                    selected={formData.payment_method}
+                    onSelect={(name) => setFormData(d => ({ ...d, payment_method: name }))}
+                    emojiOptions={['💵', '💳', '🏦', '📱', '💰']}
                     placeholder="Método de pago"
-                    value={newPaymentName}
-                    onChange={(e) => setNewPaymentName(e.target.value)}
-                    className="rounded-xl" />
-
-                      <div className="flex flex-wrap gap-1">
-                        {['💵', '💳', '🏦', '📱', '💰'].map((emoji) =>
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => setNewPaymentIcon(emoji)}
-                      className={`p-2 rounded-lg text-lg ${
-                      newPaymentIcon === emoji ? 'bg-stone-200 ring-2 ring-stone-400' : 'hover:bg-stone-200'}`
-                      }>
-
-                            {emoji}
-                          </button>
-                    )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button type="button" variant="outline" onClick={() => setShowNewPayment(false)} className="flex-1 rounded-xl">
-                          Cancelar
-                        </Button>
-                        <Button
-                      type="button"
-                      onClick={() => createCategoryMutation.mutate({ name: newPaymentName, type: 'payment_method', icon: newPaymentIcon })}
-                      disabled={!newPaymentName.trim()}
-                      className="flex-1 rounded-xl bg-stone-900">
-
-                          Crear
-                        </Button>
-                      </div>
-                    </div>
-                }
+                    cascadeQueryKeys={[['expenses']]}
+                    onAfterCreate={(pm) => setFormData(d => ({ ...d, payment_method: pm.name }))}
+                  />
                 </div>
 
                 {!editId && <div className="flex items-center justify-between p-4 bg-stone-50 rounded-xl">

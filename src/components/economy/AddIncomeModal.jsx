@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus } from 'lucide-react';
+import { X } from 'lucide-react';
+import CategoryChips from '@/components/common/CategoryChips';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,33 +39,7 @@ export default function AddIncomeModal({ isOpen, onClose, onSave, initialData = 
     }
     return () => { document.body.style.overflow = ''; };
   }, [isOpen]);
-  const [showNewCategory, setShowNewCategory] = useState(false);
-  const [newCatName, setNewCatName] = useState('');
-  const [newCatIcon, setNewCatIcon] = useState('💰');
-
   const queryClient = useQueryClient();
-
-  const { data: customCategories = [] } = useQuery({
-    queryKey: ['custom-categories'],
-    queryFn: () => api.entities.CustomCategory.list()
-  });
-
-  const incomeCategories = customCategories.filter((c) => c.type === 'income');
-
-  const createCategoryMutation = useMutation({
-    mutationFn: (data) => api.entities.CustomCategory.create(data),
-    onSuccess: (newCat) => {
-      queryClient.invalidateQueries({ queryKey: ['custom-categories'] });
-      setFormData({ ...formData, category: newCat.name });
-      setShowNewCategory(false);
-      setNewCatName('');
-    }
-  });
-
-  const deleteCategoryMutation = useMutation({
-    mutationFn: (id) => api.entities.CustomCategory.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['custom-categories'] })
-  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -178,87 +153,18 @@ export default function AddIncomeModal({ isOpen, onClose, onSave, initialData = 
                 {/* Category Selection */}
                 <div className="space-y-2">
                   <Label>Categoría</Label>
-                  {incomeCategories.length === 0 && !showNewCategory ?
-                <div className="bg-emerald-50 rounded-xl p-4 text-center">
-                      <p className="text-sm text-emerald-600 mb-3">Agregá categorías para organizar tus ingresos</p>
-                      <Button type="button" variant="outline" onClick={() => setShowNewCategory(true)} className="rounded-xl border-emerald-300 text-emerald-700">
-                        <Plus className="w-4 h-4 mr-2" /> Crear categoría
-                      </Button>
-                    </div> :
-
-                <>
-                      <div className="flex flex-wrap gap-2">
-                        {incomeCategories.map((cat) =>
-                    <div key={cat.id} className="relative group">
-                            <button
-                        type="button"
-                        onClick={() => setFormData({ ...formData, category: cat.name })}
-                        className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition-all ${
-                        formData.category === cat.name ?
-                        'bg-emerald-600 text-white' :
-                        'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`
-                        }>
-
-                              <span>{cat.icon}</span>
-                              <span>{cat.name}</span>
-                            </button>
-                            <button
-                        type="button"
-                        onClick={(e) => {e.stopPropagation();deleteCategoryMutation.mutate(cat.id);}}
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                    )}
-                        <button
-                      type="button"
-                      onClick={() => setShowNewCategory(true)}
-                      className="px-3 py-2 rounded-xl text-sm border-2 border-dashed border-emerald-300 text-emerald-500 hover:border-emerald-400">
-
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </>
-                }
-
-                  {showNewCategory &&
-                <div className="bg-emerald-50 rounded-xl p-4 space-y-3">
-                      <Input
+                  <CategoryChips
+                    categoryType="income"
+                    selected={formData.category}
+                    onSelect={(name) => setFormData(d => ({ ...d, category: name }))}
+                    emojiOptions={EMOJI_OPTIONS}
                     placeholder="Nombre de categoría"
-                    value={newCatName}
-                    onChange={(e) => setNewCatName(e.target.value)}
-                    className="rounded-xl" />
-
-                      <div className="flex flex-wrap gap-1">
-                        {EMOJI_OPTIONS.map((emoji) =>
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => setNewCatIcon(emoji)}
-                      className={`p-2 rounded-lg text-lg ${
-                      newCatIcon === emoji ? 'bg-emerald-200 ring-2 ring-emerald-400' : 'hover:bg-emerald-200'}`
-                      }>
-
-                            {emoji}
-                          </button>
-                    )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button type="button" variant="outline" onClick={() => setShowNewCategory(false)} className="flex-1 rounded-xl">
-                          Cancelar
-                        </Button>
-                        <Button
-                      type="button"
-                      onClick={() => createCategoryMutation.mutate({ name: newCatName, type: 'income', icon: newCatIcon })}
-                      disabled={!newCatName.trim()}
-                      className="flex-1 rounded-xl bg-emerald-600">
-
-                          Crear
-                        </Button>
-                      </div>
-                    </div>
-                }
+                    cascadeQueryKeys={[['incomes']]}
+                    accent="emerald"
+                    emptyMessage="Agregá categorías para organizar tus ingresos"
+                    emptyButtonLabel="Crear categoría"
+                    onAfterCreate={(cat) => setFormData(d => ({ ...d, category: cat.name }))}
+                  />
                 </div>
 
                 {!editId && <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-xl">

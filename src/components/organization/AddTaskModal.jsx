@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/api/apiClient';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus } from 'lucide-react';
+import { X } from 'lucide-react';
+import CategoryChips from '@/components/common/CategoryChips';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,41 +41,6 @@ export default function AddTaskModal({
     is_recurring: false,
     recurrence: 'semanal',
     day_of_week: ''
-  });
-  const [showNewAssignee, setShowNewAssignee] = useState(false);
-  const [showNewCategory, setShowNewCategory] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newIcon, setNewIcon] = useState('👤');
-
-  const queryClient = useQueryClient();
-
-  const { data: customCategories = [] } = useQuery({
-    queryKey: ['custom-categories'],
-    queryFn: () => api.entities.CustomCategory.list()
-  });
-
-  const customAssignees = customCategories.filter((c) => c.type === 'task_assignee');
-  const customTaskCategories = customCategories.filter((c) => c.type === 'task_category');
-
-  const createCategoryMutation = useMutation({
-    mutationFn: (data) => api.entities.CustomCategory.create(data),
-    onSuccess: (newCat) => {
-      queryClient.invalidateQueries({ queryKey: ['custom-categories'] });
-      if (newCat.type === 'task_assignee') {
-        setFormData({ ...formData, assigned_to: newCat.name });
-      } else {
-        setFormData({ ...formData, category: newCat.name });
-      }
-      setShowNewAssignee(false);
-      setShowNewCategory(false);
-      setNewName('');
-      setNewIcon('👤');
-    }
-  });
-
-  const deleteCategoryMutation = useMutation({
-    mutationFn: (id) => api.entities.CustomCategory.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['custom-categories'] })
   });
 
   useEffect(() => {
@@ -185,162 +149,31 @@ export default function AddTaskModal({
                 {/* Assignee Selection */}
                 <div className="space-y-2">
                   <Label>Asignado a *</Label>
-                  {customAssignees.length === 0 && !showNewAssignee ?
-                <div className="bg-stone-50 rounded-xl p-4 text-center">
-                      <p className="text-sm text-stone-500 mb-3">Agregá personas para asignar tareas</p>
-                      <Button type="button" variant="outline" onClick={() => setShowNewAssignee(true)} className="rounded-xl">
-                        <Plus className="w-4 h-4 mr-2" /> Agregar persona
-                      </Button>
-                    </div> :
-
-                <>
-                      <div className="flex flex-wrap gap-2">
-                        {customAssignees.map((a) =>
-                    <div key={a.id} className="relative group">
-                            <button
-                        type="button"
-                        onClick={() => setFormData({ ...formData, assigned_to: a.name })}
-                        className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition-all ${
-                        formData.assigned_to === a.name ?
-                        'bg-stone-900 text-white' :
-                        'bg-stone-100 text-stone-700 hover:bg-stone-200'}`
-                        }>
-
-                              <span>{a.icon}</span>
-                              <span>{a.name}</span>
-                            </button>
-                            <button
-                        type="button"
-                        onClick={(e) => {e.stopPropagation();deleteCategoryMutation.mutate(a.id);}}
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                    )}
-                        <button
-                      type="button"
-                      onClick={() => setShowNewAssignee(true)}
-                      className="px-3 py-2 rounded-xl text-sm border-2 border-dashed border-stone-300 text-stone-500">
-
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </>
-                }
-
-                  {showNewAssignee &&
-                <div className="bg-stone-50 rounded-xl p-4 space-y-3">
-                      <Input
+                  <CategoryChips
+                    categoryType="task_assignee"
+                    selected={formData.assigned_to}
+                    onSelect={(name) => setFormData(d => ({ ...d, assigned_to: name }))}
+                    emojiOptions={EMOJI_OPTIONS.slice(0, 6)}
                     placeholder="Nombre"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    className="rounded-xl" />
-
-                      <div className="flex flex-wrap gap-1">
-                        {EMOJI_OPTIONS.slice(0, 6).map((emoji) =>
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => setNewIcon(emoji)}
-                      className={`p-2 rounded-lg text-lg ${
-                      newIcon === emoji ? 'bg-stone-200 ring-2 ring-stone-400' : 'hover:bg-stone-200'}`
-                      }>
-
-                            {emoji}
-                          </button>
-                    )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button type="button" variant="outline" onClick={() => setShowNewAssignee(false)} className="flex-1 rounded-xl">
-                          Cancelar
-                        </Button>
-                        <Button
-                      type="button"
-                      onClick={() => createCategoryMutation.mutate({ name: newName, type: 'task_assignee', icon: newIcon })}
-                      disabled={!newName.trim()}
-                      className="flex-1 rounded-xl bg-stone-900">
-
-                          Agregar
-                        </Button>
-                      </div>
-                    </div>
-                }
+                    cascadeQueryKeys={[['tasks']]}
+                    emptyMessage="Agregá personas para asignar tareas"
+                    emptyButtonLabel="Agregar persona"
+                    onAfterCreate={(cat) => setFormData(d => ({ ...d, assigned_to: cat.name }))}
+                  />
                 </div>
 
                 {/* Category Selection */}
                 <div className="space-y-2">
                   <Label>Categoría</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {customTaskCategories.map((c) =>
-                  <div key={c.id} className="relative group">
-                        <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, category: c.name })}
-                      className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 transition-all ${
-                      formData.category === c.name ?
-                      'bg-stone-900 text-white' :
-                      'bg-stone-100 text-stone-700 hover:bg-stone-200'}`
-                      }>
-
-                          <span>{c.icon}</span>
-                          <span>{c.name}</span>
-                        </button>
-                        <button
-                      type="button"
-                      onClick={(e) => {e.stopPropagation();deleteCategoryMutation.mutate(c.id);}}
-                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                  )}
-                    <button
-                    type="button"
-                    onClick={() => setShowNewCategory(true)}
-                    className="px-3 py-2 rounded-xl text-sm border-2 border-dashed border-stone-300 text-stone-500">
-
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {showNewCategory &&
-                <div className="bg-stone-50 rounded-xl p-4 space-y-3">
-                      <Input
+                  <CategoryChips
+                    categoryType="task_category"
+                    selected={formData.category}
+                    onSelect={(name) => setFormData(d => ({ ...d, category: name }))}
+                    emojiOptions={EMOJI_OPTIONS.slice(6)}
                     placeholder="Categoría"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    className="rounded-xl" />
-
-                      <div className="flex flex-wrap gap-1">
-                        {EMOJI_OPTIONS.slice(6).map((emoji) =>
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => setNewIcon(emoji)}
-                      className={`p-2 rounded-lg text-lg ${
-                      newIcon === emoji ? 'bg-stone-200 ring-2 ring-stone-400' : 'hover:bg-stone-200'}`
-                      }>
-
-                            {emoji}
-                          </button>
-                    )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button type="button" variant="outline" onClick={() => setShowNewCategory(false)} className="flex-1 rounded-xl">
-                          Cancelar
-                        </Button>
-                        <Button
-                      type="button"
-                      onClick={() => createCategoryMutation.mutate({ name: newName, type: 'task_category', icon: newIcon })}
-                      disabled={!newName.trim()}
-                      className="flex-1 rounded-xl bg-stone-900">
-
-                          Crear
-                        </Button>
-                      </div>
-                    </div>
-                }
+                    cascadeQueryKeys={[['tasks']]}
+                    onAfterCreate={(cat) => setFormData(d => ({ ...d, category: cat.name }))}
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
