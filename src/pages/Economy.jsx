@@ -40,6 +40,12 @@ const CHART_META = {
     { id: 'anual_cat_pie', label: 'Torta anual' },
     { id: 'anual_medio_bar', label: 'Por medio de pago' },
   ],
+  comparar: [
+    { id: 'comparar_cat_bar', label: 'Por categoría' },
+    { id: 'comparar_medio_bar', label: 'Por medio de pago' },
+    { id: 'comparar_diff', label: 'Diferencia neta por categoría' },
+    { id: 'comparar_pies', label: 'Distribución por período' },
+  ],
 };
 
 const loadChartVisibility = () => {
@@ -492,7 +498,7 @@ export default function Economy() {
             </button>
           ))}
       </div>
-      {(activeTab === 'mensual' || activeTab === 'anual') && (
+      {(activeTab === 'mensual' || activeTab === 'anual' || activeTab === 'comparar') && (
         <button onClick={() => setShowChartConfig(true)} className="p-2 rounded-xl hover:bg-stone-100 text-stone-400 hover:text-stone-700 flex-shrink-0 transition-colors">
           <Settings className="w-4 h-4" />
         </button>
@@ -524,6 +530,8 @@ export default function Economy() {
           </button>
         )}
       </div>
+
+      <Tabs />
 
       {/* Selector de período */}
       <div className="flex items-center justify-center gap-2 mb-4">
@@ -595,8 +603,20 @@ export default function Economy() {
       {activeTab === 'anual' && (
         <SummaryCards gastos={anualData.totalAnual} ingresos={anualData.ingresosAnual} bal={anualData.balanceAnual} />
       )}
-
-      <Tabs />
+      {activeTab === 'comparar' && (
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 text-center">
+            <p className="text-xs text-indigo-500 mb-1">{compareData.label1}</p>
+            <p className="text-lg font-bold text-indigo-700">-{fmt(compareData.totGasto1)}</p>
+            <p className="text-xs text-indigo-400 mt-1">{fmtSigned(compareData.bal1)} balance</p>
+          </div>
+          <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 text-center">
+            <p className="text-xs text-amber-500 mb-1">{compareData.label2}</p>
+            <p className="text-lg font-bold text-amber-700">-{fmt(compareData.totGasto2)}</p>
+            <p className="text-xs text-amber-400 mt-1">{fmtSigned(compareData.bal2)} balance</p>
+          </div>
+        </div>
+      )}
 
       {/* CONTENT */}
       <AnimatePresence mode="wait">
@@ -904,20 +924,7 @@ export default function Economy() {
               <div className="flex items-center justify-center py-16"><Loader2 className="w-8 h-8 text-stone-400 animate-spin" /></div>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 text-center">
-                    <p className="text-xs text-indigo-500 mb-1">{compareData.label1}</p>
-                    <p className="text-lg font-bold text-indigo-700">-{fmt(compareData.totGasto1)}</p>
-                    <p className="text-xs text-indigo-400 mt-1">{fmtSigned(compareData.bal1)} balance</p>
-                  </div>
-                  <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 text-center">
-                    <p className="text-xs text-amber-500 mb-1">{compareData.label2}</p>
-                    <p className="text-lg font-bold text-amber-700">-{fmt(compareData.totGasto2)}</p>
-                    <p className="text-xs text-amber-400 mt-1">{fmtSigned(compareData.bal2)} balance</p>
-                  </div>
-                </div>
-
-                {compareData.cats.length > 0 && (
+                {compareData.cats.length > 0 && isVisible('comparar_cat_bar') && (
                   <div className="bg-white rounded-2xl p-4 border border-stone-100">
                     <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por categoría</h3>
                     <ResponsiveContainer width="100%" height={Math.max(180, compareData.cats.length * 32)}>
@@ -934,7 +941,7 @@ export default function Economy() {
                   </div>
                 )}
 
-                {compareData.medios.length > 0 && (
+                {compareData.medios.length > 0 && isVisible('comparar_medio_bar') && (
                   <div className="bg-white rounded-2xl p-4 border border-stone-100">
                     <h3 className="font-semibold text-stone-900 mb-4 text-sm">Por medio de pago</h3>
                     <ResponsiveContainer width="100%" height={Math.max(120, compareData.medios.length * 36)}>
@@ -948,6 +955,62 @@ export default function Economy() {
                         <Bar dataKey={compareData.label2} fill="#f59e0b" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
+                  </div>
+                )}
+
+                {compareData.cats.length > 0 && isVisible('comparar_diff') && (
+                  <div className="bg-white rounded-2xl p-4 border border-stone-100">
+                    <h3 className="font-semibold text-stone-900 mb-1 text-sm">Diferencia por categoría</h3>
+                    <p className="text-xs text-stone-400 mb-3">
+                      Positivo = más en <span className="text-indigo-500">{compareData.label1}</span> · Negativo = más en <span className="text-amber-500">{compareData.label2}</span>
+                    </p>
+                    <ResponsiveContainer width="100%" height={Math.max(180, compareData.cats.length * 32)}>
+                      <BarChart layout="vertical"
+                        data={[...compareData.cats]
+                          .map(c => ({ name: c.categoria, diff: c.val1 - c.val2 }))
+                          .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `$${(Math.abs(v) / 1000).toFixed(0)}k`} />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={85} />
+                        <Tooltip formatter={v => [fmtSigned(/** @type {number} */(v)), 'Diferencia']} />
+                        <ReferenceLine x={0} stroke="#d1d5db" />
+                        <Bar dataKey="diff" radius={[0, 4, 4, 0]}>
+                          {[...compareData.cats]
+                            .map(c => ({ diff: c.val1 - c.val2 }))
+                            .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
+                            .map((d, i) => <Cell key={i} fill={d.diff >= 0 ? '#6366f1' : '#f59e0b'} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                {compareData.cats.length > 0 && isVisible('comparar_pies') && (
+                  <div className="bg-white rounded-2xl p-4 border border-stone-100">
+                    <h3 className="font-semibold text-stone-900 mb-3 text-sm">Distribución por período</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { label: compareData.label1, dataKey: 'val1', color: '#6366f1' },
+                        { label: compareData.label2, dataKey: 'val2', color: '#f59e0b' },
+                      ].map(({ label, dataKey, color }) => (
+                        <div key={label}>
+                          <p className="text-xs text-center font-medium mb-1" style={{ color }}>{label}</p>
+                          <ResponsiveContainer width="100%" height={150}>
+                            <PieChart>
+                              <Pie
+                                data={compareData.cats.filter(c => c[dataKey] > 0).map(c => ({ name: c.categoria, value: c[dataKey] }))}
+                                dataKey="value" nameKey="name"
+                                cx="50%" cy="50%" innerRadius={28} outerRadius={55} paddingAngle={2}>
+                                {compareData.cats.filter(c => c[dataKey] > 0).map((_, i) => (
+                                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip formatter={(v, name) => [fmt(/** @type {number} */(v)), name]} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </>
@@ -1065,7 +1128,7 @@ export default function Economy() {
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                {(activeTab === 'mensual' ? CHART_META.mensual : CHART_META.anual).map(chart => (
+                {(CHART_META[activeTab] || []).map(chart => (
                   <button key={chart.id} onClick={() => toggleChart(chart.id)}
                     className="w-full flex items-center justify-between px-4 py-3 rounded-2xl border border-stone-100 hover:bg-stone-50 transition-all">
                     <span className="text-sm text-stone-700">{chart.label}</span>
