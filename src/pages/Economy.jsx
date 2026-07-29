@@ -302,7 +302,11 @@ export default function Economy() {
   });
 
   const periodMovimientos = useMemo(() => [
-    ...periodExpenses.map(e => ({ id: e.id, tipo: 'Gasto', fecha: e.date, monto: e.amount || 0, descripcion: e.description, categoria: e.category, medio: e.payment_method })),
+    ...periodExpenses.map(e => ({
+      id: e.id, tipo: 'Gasto', fecha: e.date, monto: e.amount || 0, descripcion: e.description, categoria: e.category, medio: e.payment_method,
+      purchaseDate: e.purchase_date && e.purchase_date !== e.date ? e.purchase_date : null,
+      installmentNumber: e.installment_number, installmentTotal: e.installment_total,
+    })),
     ...periodIncomes.map(i => ({ id: i.id, tipo: 'Ingreso', fecha: i.date, monto: i.amount || 0, descripcion: i.description, categoria: i.category, medio: null })),
   ].sort((a, b) => {
     const da = a.fecha ? new Date(a.fecha).getTime() : 0;
@@ -416,7 +420,7 @@ export default function Economy() {
         categoria: expense.category || '-',
         monto: expense.amount,
         medio: expense.payment_method || '-',
-        cuota: '-',
+        cuota: expense.installment_total > 1 ? `${expense.installment_number}/${expense.installment_total}` : '-',
         moneda: 'Pesos',
         descripcion: expense.description || '-',
         supabaseId: expense.id || '',
@@ -476,7 +480,7 @@ export default function Economy() {
         categoria: expense.category || '-',
         monto: expense.amount,
         medio: expense.payment_method || '-',
-        cuota: '-',
+        cuota: expense.installment_total > 1 ? `${expense.installment_number}/${expense.installment_total}` : '-',
         moneda: 'Pesos',
         descripcion: expense.description || '-',
       });
@@ -836,7 +840,7 @@ export default function Economy() {
                           <div className="min-w-0 flex-1">
                             <p className="font-medium text-stone-900 text-sm truncate">{m.descripcion || m.categoria || m.tipo}</p>
                             <p className="text-xs text-stone-400 truncate">
-                              {m.fecha}{m.categoria && ` • ${m.categoria}`}{m.medio && ` • ${m.medio}`}
+                              {m.fecha}{m.purchaseDate && ` (compra: ${m.purchaseDate})`}{m.installmentTotal > 1 && ` • Cuota ${m.installmentNumber}/${m.installmentTotal}`}{m.categoria && ` • ${m.categoria}`}{m.medio && ` • ${m.medio}`}
                             </p>
                           </div>
                           <span className={`font-bold text-sm flex-shrink-0 ${m.tipo === 'Ingreso' ? 'text-emerald-600' : 'text-red-600'}`}>

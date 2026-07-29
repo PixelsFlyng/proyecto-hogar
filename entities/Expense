@@ -17,7 +17,12 @@
     "date": {
       "type": "string",
       "format": "date",
-      "description": "Fecha del gasto"
+      "description": "Fecha del gasto (para tarjeta de crédito: fecha del resumen/cierre al que se asigna)"
+    },
+    "purchase_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha real en que se hizo la compra (puede diferir de 'date' cuando es tarjeta de crédito)"
     },
     "payment_method": {
       "type": "string",
@@ -53,6 +58,14 @@
     "original_amount": {
       "type": "number",
       "description": "Monto original antes de modificaci\u00f3n"
+    },
+    "installment_number": {
+      "type": "number",
+      "description": "N\u00famero de cuota actual (para compras en cuotas)"
+    },
+    "installment_total": {
+      "type": "number",
+      "description": "Cantidad total de cuotas de la compra"
     }
   },
   "required": [

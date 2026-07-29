@@ -46,6 +46,11 @@ export default function ExpenseCard({ expense, onDelete, customCategories = [] }
                 <span>
                   {expense.date && format(parseISO(expense.date), "d 'de' MMM", { locale: es })}
                 </span>
+                {expense.purchase_date && expense.purchase_date !== expense.date && (
+                  <span className="text-stone-400">
+                    (compra: {format(parseISO(expense.purchase_date), "d 'de' MMM", { locale: es })})
+                  </span>
+                )}
                 {expense.payment_method && (
                   <>
                     <span>•</span>
@@ -61,6 +66,14 @@ export default function ExpenseCard({ expense, onDelete, customCategories = [] }
                     <span className="flex items-center gap-1 text-violet-600">
                       <Repeat className="w-3 h-3" />
                       Recurrente
+                    </span>
+                  </>
+                )}
+                {expense.installment_total > 1 && (
+                  <>
+                    <span>•</span>
+                    <span className="text-blue-600">
+                      Cuota {expense.installment_number}/{expense.installment_total}
                     </span>
                   </>
                 )}

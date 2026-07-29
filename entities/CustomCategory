@@ -24,6 +24,20 @@
     "color": {
       "type": "string",
       "description": "Color de la categor\u00eda"
+    },
+    "is_credit_card": {
+      "type": "boolean",
+      "default": false,
+      "description": "Es tarjeta de cr\u00e9dito (solo aplica a type=payment_method)"
+    },
+    "closing_day": {
+      "type": "number",
+      "description": "D\u00eda de cierre del resumen (1-28, solo tarjetas de cr\u00e9dito)"
+    },
+    "default_installments": {
+      "type": "number",
+      "default": 1,
+      "description": "Cantidad de cuotas predeterminada al usar esta tarjeta"
     }
   },
   "required": [

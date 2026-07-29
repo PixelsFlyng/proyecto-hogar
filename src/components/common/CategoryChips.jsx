@@ -58,13 +58,21 @@ export default function CategoryChips({
   const queryClient = useQueryClient();
   const s = SCHEME[accent] || SCHEME.stone;
 
+  const isPaymentMethod = categoryType === 'payment_method';
+
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState('');
   const [newIcon, setNewIcon] = useState(emojiOptions?.[0] || '📦');
+  const [newIsCard, setNewIsCard] = useState(false);
+  const [newClosingDay, setNewClosingDay] = useState('');
+  const [newDefaultInstallments, setNewDefaultInstallments] = useState('1');
 
   const [editingId, setEditingId] = useState(/** @type {string|null} */ (null));
   const [editingName, setEditingName] = useState('');
   const [editingIcon, setEditingIcon] = useState('');
+  const [editingIsCard, setEditingIsCard] = useState(false);
+  const [editingClosingDay, setEditingClosingDay] = useState('');
+  const [editingDefaultInstallments, setEditingDefaultInstallments] = useState('1');
 
   const { data: allCategories = [] } = useQuery({
     queryKey: ['custom-categories'],
@@ -82,6 +90,9 @@ export default function CategoryChips({
       setShowNew(false);
       setNewName('');
       setNewIcon(emojiOptions?.[0] || '📦');
+      setNewIsCard(false);
+      setNewClosingDay('');
+      setNewDefaultInstallments('1');
     },
   });
 
@@ -91,8 +102,8 @@ export default function CategoryChips({
   });
 
   const renameMutation = useMutation({
-    mutationFn: async (/** @type {{cat: any, name: string, icon: string}} */ { cat, name, icon }) => {
-      await api.entities.CustomCategory.update(cat.id, { name, icon });
+    mutationFn: async (/** @type {{cat: any, name: string, icon: string, extra?: any}} */ { cat, name, icon, extra }) => {
+      await api.entities.CustomCategory.update(cat.id, { name, icon, ...(extra || {}) });
       if (name !== cat.name) await api.renameCategoryLabel(categoryType, cat.name, name);
     },
     onSuccess: (_data, { cat, name }) => {
@@ -111,13 +122,21 @@ export default function CategoryChips({
     setEditingId(cat.id);
     setEditingName(cat.name);
     setEditingIcon(cat.icon || emojiOptions?.[0] || '📦');
+    setEditingIsCard(!!cat.is_credit_card);
+    setEditingClosingDay(cat.closing_day ? String(cat.closing_day) : '');
+    setEditingDefaultInstallments(cat.default_installments ? String(cat.default_installments) : '1');
   };
 
   const confirmEdit = () => {
     if (!editingCat) return;
     const trimmed = editingName.trim();
     if (!trimmed) return;
-    renameMutation.mutate({ cat: editingCat, name: trimmed, icon: editingIcon });
+    const extra = isPaymentMethod ? {
+      is_credit_card: editingIsCard,
+      closing_day: editingIsCard && editingClosingDay ? Math.min(28, Math.max(1, parseInt(editingClosingDay) || 1)) : null,
+      default_installments: editingIsCard ? Math.max(1, parseInt(editingDefaultInstallments) || 1) : null,
+    } : undefined;
+    renameMutation.mutate({ cat: editingCat, name: trimmed, icon: editingIcon, extra });
   };
 
   if (categories.length === 0 && !showNew && emptyMessage) {
@@ -195,6 +214,41 @@ export default function CategoryChips({
               </button>
             ))}
           </div>
+          {isPaymentMethod && (
+            <div className="space-y-2 pt-1 border-t border-stone-200">
+              <label className="flex items-center gap-2 text-sm text-stone-700">
+                <input
+                  type="checkbox"
+                  checked={editingIsCard}
+                  onChange={(e) => setEditingIsCard(e.target.checked)}
+                />
+                Es tarjeta de crédito
+              </label>
+              {editingIsCard && (
+                <div className="flex gap-2">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs text-stone-500">Día de cierre</label>
+                    <Input
+                      type="number" min="1" max="28"
+                      value={editingClosingDay}
+                      onChange={(e) => setEditingClosingDay(e.target.value)}
+                      placeholder="Ej: 15"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs text-stone-500">Cuotas predeterminadas</label>
+                    <Input
+                      type="number" min="1"
+                      value={editingDefaultInstallments}
+                      onChange={(e) => setEditingDefaultInstallments(e.target.value)}
+                      className="rounded-xl"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={() => setEditingId(null)} className="flex-1 rounded-xl">
               Cancelar
@@ -228,13 +282,57 @@ export default function CategoryChips({
               </button>
             ))}
           </div>
+          {isPaymentMethod && (
+            <div className="space-y-2 pt-1 border-t border-stone-200">
+              <label className="flex items-center gap-2 text-sm text-stone-700">
+                <input
+                  type="checkbox"
+                  checked={newIsCard}
+                  onChange={(e) => setNewIsCard(e.target.checked)}
+                />
+                Es tarjeta de crédito
+              </label>
+              {newIsCard && (
+                <div className="flex gap-2">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs text-stone-500">Día de cierre</label>
+                    <Input
+                      type="number" min="1" max="28"
+                      value={newClosingDay}
+                      onChange={(e) => setNewClosingDay(e.target.value)}
+                      placeholder="Ej: 15"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs text-stone-500">Cuotas predeterminadas</label>
+                    <Input
+                      type="number" min="1"
+                      value={newDefaultInstallments}
+                      onChange={(e) => setNewDefaultInstallments(e.target.value)}
+                      className="rounded-xl"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={() => setShowNew(false)} className="flex-1 rounded-xl">
               Cancelar
             </Button>
             <Button
               type="button"
-              onClick={() => createMutation.mutate({ name: newName, type: categoryType, icon: newIcon })}
+              onClick={() => createMutation.mutate({
+                name: newName,
+                type: categoryType,
+                icon: newIcon,
+                ...(isPaymentMethod ? {
+                  is_credit_card: newIsCard,
+                  closing_day: newIsCard && newClosingDay ? Math.min(28, Math.max(1, parseInt(newClosingDay) || 1)) : null,
+                  default_installments: newIsCard ? Math.max(1, parseInt(newDefaultInstallments) || 1) : null,
+                } : {}),
+              })}
               disabled={!newName.trim()}
               className={`flex-1 rounded-xl ${s.createBtn}`}
             >

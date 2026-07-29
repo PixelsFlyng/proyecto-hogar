@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/apiClient';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
@@ -12,6 +12,7 @@ import { useGoogleSheets } from '@/hooks/useGoogleSheets';
 import CategoryChips from '@/components/common/CategoryChips';
 
 import { format, addMonths, parseISO, isBefore } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const EMOJI_OPTIONS = ['🍽️', '💡', '🚗', '🎬', '💊', '🏠', '📦', '🎁', '✈️', '🎮', '📚', '🏋️', '🛒', '💰', '🏦', '💳'];
 
@@ -19,8 +20,21 @@ const EMPTY_FORM = {
   description: '', amount: '', category: '',
   date: format(new Date(), 'yyyy-MM-dd'),
   payment_method: '', is_fixed: false,
-  recurrence_end: 'indefinido', recurrence_months: 12, recurrence_end_date: ''
+  recurrence_end: 'indefinido', recurrence_months: 12, recurrence_end_date: '',
+  installments: '1'
 };
+
+// Fecha del resumen al que se asigna una compra con tarjeta: si el día de compra
+// es posterior al día de cierre, cae en el resumen que cierra el mes siguiente.
+function firstBillingDate(purchaseDateStr, card) {
+  const purchaseDate = parseISO(purchaseDateStr);
+  if (card?.is_credit_card && card?.closing_day) {
+    let base = new Date(purchaseDate.getFullYear(), purchaseDate.getMonth(), card.closing_day);
+    if (purchaseDate.getDate() > card.closing_day) base = addMonths(base, 1);
+    return base;
+  }
+  return purchaseDate;
+}
 
 export default function AddExpenseModal({ isOpen, onClose, onSave, initialData = /** @type {any} */ (null), editId = /** @type {string|null} */ (null) }) {
   const [formData, setFormData] = useState(EMPTY_FORM);
@@ -35,7 +49,8 @@ export default function AddExpenseModal({ isOpen, onClose, onSave, initialData =
         date: initialData.date || format(new Date(), 'yyyy-MM-dd'),
         payment_method: initialData.payment_method || '',
         is_fixed: false,
-        recurrence_end: 'indefinido', recurrence_months: 12, recurrence_end_date: ''
+        recurrence_end: 'indefinido', recurrence_months: 12, recurrence_end_date: '',
+        installments: '1'
       } : EMPTY_FORM);
     } else {
       document.body.style.overflow = '';
@@ -44,6 +59,13 @@ export default function AddExpenseModal({ isOpen, onClose, onSave, initialData =
   }, [isOpen]);
   const queryClient = useQueryClient();
   const { isConnected, addExpenseCategoryToSheet } = useGoogleSheets();
+
+  const { data: allCategories = [] } = useQuery({
+    queryKey: ['custom-categories'],
+    queryFn: () => api.entities.CustomCategory.list(),
+  });
+  const selectedCard = allCategories.find(c => c.type === 'payment_method' && c.name === formData.payment_method) || null;
+  const installmentsNum = Math.max(1, parseInt(formData.installments) || 1);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -61,13 +83,39 @@ export default function AddExpenseModal({ isOpen, onClose, onSave, initialData =
       recurrence_end_date: formData.is_fixed && formData.recurrence_end === 'fecha' ? formData.recurrence_end_date : null
     };
 
-    let result;
     if (editId) {
-      result = await api.entities.Expense.update(editId, baseExpense);
+      const result = await api.entities.Expense.update(editId, baseExpense);
+      onSave && onSave(result);
+    } else if (installmentsNum > 1) {
+      const total = parseFloat(formData.amount);
+      const perInstallment = Math.round((total / installmentsNum) * 100) / 100;
+      const lastInstallment = Math.round((total - perInstallment * (installmentsNum - 1)) * 100) / 100;
+      const startDate = firstBillingDate(formData.date, selectedCard);
+
+      let parentId;
+      for (let i = 0; i < installmentsNum; i++) {
+        const payload = {
+          description: formData.description,
+          amount: i === installmentsNum - 1 ? lastInstallment : perInstallment,
+          category: formData.category,
+          date: format(addMonths(startDate, i), 'yyyy-MM-dd'),
+          purchase_date: formData.date,
+          payment_method: formData.payment_method,
+          is_fixed: false,
+          installment_number: i + 1,
+          installment_total: installmentsNum,
+          ...(i > 0 ? { parent_id: parentId } : {}),
+        };
+        const created = await api.entities.Expense.create(payload);
+        if (i === 0) parentId = created.id;
+        onSave && onSave(created);
+      }
     } else {
-      result = await api.entities.Expense.create(baseExpense);
+      const billingDate = format(firstBillingDate(formData.date, selectedCard), 'yyyy-MM-dd');
+      const result = await api.entities.Expense.create({ ...baseExpense, date: billingDate, purchase_date: formData.date });
+      onSave && onSave(result);
       if (formData.is_fixed) {
-        const startDate = parseISO(formData.date);
+        const startDate = parseISO(billingDate);
         let endDate;
         if (formData.recurrence_end === 'indefinido') endDate = addMonths(startDate, 24);
         else if (formData.recurrence_end === 'meses') endDate = addMonths(startDate, formData.recurrence_months);
@@ -75,7 +123,8 @@ export default function AddExpenseModal({ isOpen, onClose, onSave, initialData =
         if (endDate) {
           let currentDate = addMonths(startDate, 1);
           while (isBefore(currentDate, endDate)) {
-            await api.entities.Expense.create({ ...baseExpense, date: format(currentDate, 'yyyy-MM-dd'), parent_id: result.id });
+            const child = await api.entities.Expense.create({ ...baseExpense, date: format(currentDate, 'yyyy-MM-dd'), parent_id: result.id });
+            onSave && onSave(child);
             currentDate = addMonths(currentDate, 1);
           }
         }
@@ -83,7 +132,6 @@ export default function AddExpenseModal({ isOpen, onClose, onSave, initialData =
     }
 
     queryClient.invalidateQueries({ queryKey: ['expenses'] });
-    onSave && onSave(result);
     setFormData(EMPTY_FORM);
     onClose();
   };
@@ -181,15 +229,44 @@ export default function AddExpenseModal({ isOpen, onClose, onSave, initialData =
                   <CategoryChips
                     categoryType="payment_method"
                     selected={formData.payment_method}
-                    onSelect={(name) => setFormData(d => ({ ...d, payment_method: name }))}
+                    onSelect={(name) => {
+                      const card = allCategories.find(c => c.type === 'payment_method' && c.name === name);
+                      setFormData(d => ({ ...d, payment_method: name, installments: card?.is_credit_card ? String(card.default_installments || 1) : '1' }));
+                    }}
                     emojiOptions={['💵', '💳', '🏦', '📱', '💰']}
                     placeholder="Método de pago"
                     cascadeQueryKeys={[['expenses']]}
-                    onAfterCreate={(pm) => setFormData(d => ({ ...d, payment_method: pm.name }))}
+                    onAfterCreate={(pm) => setFormData(d => ({ ...d, payment_method: pm.name, installments: pm?.is_credit_card ? String(pm.default_installments || 1) : '1' }))}
                   />
+                  {selectedCard?.is_credit_card && formData.date && (
+                    <p className="text-xs text-stone-500">
+                      {selectedCard.closing_day
+                        ? `Se asigna al resumen que cierra el ${format(firstBillingDate(formData.date, selectedCard), "d 'de' MMMM", { locale: es })}`
+                        : 'Esta tarjeta todavía no tiene día de cierre configurado (editala con el lápiz para agregarlo).'}
+                    </p>
+                  )}
                 </div>
 
-                {!editId && <div className="flex items-center justify-between p-4 bg-stone-50 rounded-xl">
+                {!editId && !formData.is_fixed && (
+                  <div className="space-y-2">
+                    <Label htmlFor="installments">Cuotas</Label>
+                    <Input
+                      id="installments"
+                      type="number"
+                      min="1"
+                      value={formData.installments}
+                      onChange={(e) => setFormData({ ...formData, installments: e.target.value })}
+                      className="rounded-xl w-24"
+                    />
+                    {installmentsNum > 1 && formData.amount && (
+                      <p className="text-xs text-stone-500">
+                        Se generarán {installmentsNum} gastos de ${(parseFloat(formData.amount) / installmentsNum).toFixed(2)} entre {format(firstBillingDate(formData.date, selectedCard), "MMM yyyy", { locale: es })} y {format(addMonths(firstBillingDate(formData.date, selectedCard), installmentsNum - 1), "MMM yyyy", { locale: es })}.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {!editId && installmentsNum <= 1 && <div className="flex items-center justify-between p-4 bg-stone-50 rounded-xl">
                   <div>
                     <p className="font-medium text-stone-900">Gasto recurrente</p>
                     <p className="text-sm text-stone-500">Se repite cada mes</p>

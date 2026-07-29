@@ -208,3 +208,5 @@ Antes de dar por terminado un cambio: `npm run lint && npm run build`.
 - [ ] **Shopping - Sin límite de tamaño** — la lista no debe tener altura máxima fija; evitar scroll interno dentro de la lista.
 - [ ] **Shopping - Colapsar/expandir listas** — poder comprimir y expandir cada lista individualmente.
 - [ ] **Shopping - Botón solapado** — cuando hay muchos ítems, el botón "agregar ítem" queda detrás del botón "agregar lista"; resolver el overlap sin romper el layout.
+- [ ] **Economía - Límite de crédito por tarjeta** — poder configurar un límite de crédito para cada medio de pago marcado como tarjeta de crédito (junto a día de cierre y cuotas predeterminadas en `CategoryChips`).
+- [ ] **Economía - Cierre por día de semana** — el día de cierre de una tarjeta hoy es solo un número fijo (1-28); agregar la opción de definirlo como una regla de día de semana (ej: "el último jueves del mes") además del número fijo.
